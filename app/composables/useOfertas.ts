@@ -17,6 +17,7 @@ export interface Oferta {
   preco: number | null
   original: number | null
   imagem: string | null
+  condicao: string | null // ex.: "no Pix": o preço só vale nessa condição
   categoriaId: string | null
   status: StatusPostagem
   motivo?: string
@@ -40,6 +41,7 @@ const daLinha = (o: LinhaOferta): Oferta => ({
   preco: o.preco == null ? null : Number(o.preco),
   original: o.preco_original == null ? null : Number(o.preco_original),
   imagem: o.imagem_url,
+  condicao: o.condicao_preco,
   categoriaId: o.categoria_id,
   status: o.status as StatusPostagem,
   motivo: o.motivo ?? undefined,
@@ -75,14 +77,13 @@ export function useOfertas() {
       .single()
     if (error) return error.code === '23505' ? 'duplicada' : 'erro'
     ofertas.value.unshift(daLinha(data as LinhaOferta))
-    // TODO: disparar a leitura do produto
+    $fetch(`/api/ofertas/${data.id}/processar`, { method: 'POST' }).catch(() => {})
     return 'ok'
   }
 
-  // Volta para a fila de leitura do produto
+  // Lê o produto de novo (o servidor volta a oferta para "pendente" e processa)
   async function tentarNovamente(o: Oferta) {
-    const { error } = await supabase.from('ofertas').update({ status: 'pendente', motivo: null }).eq('id', o.id)
-    if (error) throw error
+    await $fetch(`/api/ofertas/${o.id}/processar`, { method: 'POST' })
     o.status = 'pendente'
     o.motivo = undefined
   }
@@ -93,11 +94,19 @@ export function useOfertas() {
     ofertas.value = ofertas.value.filter(x => x.id !== o.id)
   }
 
-  // Dependem de fases seguintes (IA e UazAPI). null/false = não disponível ainda (já avisou)
-  async function novaLegenda(_o: Oferta): Promise<string | null> {
-    toast.info('Disponível em breve', 'A legenda com IA entra na próxima fase.')
-    return null
+  // Outra legenda com IA (mesmos dados do produto). null = não deu (já avisou)
+  async function novaLegenda(o: Oferta): Promise<string | null> {
+    try {
+      const { legenda, ia } = await $fetch(`/api/ofertas/${o.id}/legenda`, { method: 'POST' })
+      if (!ia) toast.info('Usamos o modelo pronto', 'A IA não respondeu agora; tente "Outra" de novo.')
+      return legenda
+    } catch {
+      toast.erro('Não foi possível gerar outra legenda', 'O produto precisa ter sido lido antes.')
+      return null
+    }
   }
+
+  // Depende da UazAPI. false = não disponível ainda (já avisou)
   async function enviarAgora(_o: Oferta): Promise<boolean> {
     toast.info('Disponível em breve', 'O envio funciona quando o WhatsApp for ligado pela UazAPI.')
     return false

@@ -221,6 +221,30 @@ próxima (ver checklist de aceite no fim).
 - Tratar como frágil: a estrutura da página pode mudar; não deixar a função
   quebrar o pipeline inteiro, só aquela postagem.
 
+**Implementado** (`server/utils/leitorProduto.ts`, `processarOferta.ts`):
+- Roda no servidor do app logo após gravar a oferta (formulário público e
+  painel) e no "Tentar de novo" (`POST /api/ofertas/:id/processar`).
+- **Mercado Livre:** o `meli.la` costuma abrir a página "social" do afiliado
+  (`/social/<afiliado>`) com dezenas de produtos; o certo é o **card em
+  destaque** (título = `og:title`, preço em `current_price`, "de" em
+  `previous_price`, rótulo em `discount_label`). Página normal do produto:
+  JSON-LD + `andes-money-amount--previous`.
+- **Condição do preço:** quando a loja diz "no Pix", o preço só vale no Pix →
+  `ofertas.condicao_preco = 'no Pix'` e a legenda tem que dizer. O % de
+  desconto usado é o **da loja** (`desconto_rotulo`), não a conta.
+- Foto = a real da página (`og:image`). **Nunca gerar imagem de produto com
+  IA** (enganoso). Arte com selo de preço, se houver, é montada por código.
+
+### Legenda (implementado — `server/utils/legenda.ts`)
+- **OpenRouter**, modelo `anthropic/claude-haiku-5.5` (configurável:
+  `OPENROUTER_MODELO`), `reasoning` desligado (senão a resposta vem cortada).
+- Preço, "de", desconto e condição vão como textos exatos; a resposta só é
+  aceita se tiver o preço e o link exatos, nenhum outro R$ e nenhuma outra
+  porcentagem (exceto as do título). Senão → modelo pronto sem IA. O rodapé
+  das Configurações é anexado pelo código, nunca pela IA.
+- Formatação WhatsApp: `*negrito*`, `_itálico_`, `~riscado~`; sem urgência
+  inventada. Botão "Outra" → `POST /api/ofertas/:id/legenda`.
+
 ### 4. Filtro de regras
 - Antes de aprovar: link/dado completos; não é duplicata (`link_afiliado`
   já único no banco cobre isso); limite diário da categoria/grupo não

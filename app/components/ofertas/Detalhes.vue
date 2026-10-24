@@ -101,7 +101,7 @@ const ICONE_ENVIO = {
     <div v-if="oferta.preco != null" class="grid grid-cols-3 divide-x divide-line rounded border border-line bg-surface py-3 text-center">
       <div class="px-2">
         <p class="text-title">{{ formatarPreco(oferta.preco) }}</p>
-        <p class="text-[12px] text-muted">preço</p>
+        <p class="text-[12px] text-muted">preço{{ oferta.condicao ? ` ${oferta.condicao}` : '' }}</p>
       </div>
       <div class="px-2">
         <p class="text-title text-muted line-through decoration-1">{{ oferta.original ? formatarPreco(oferta.original) : '—' }}</p>

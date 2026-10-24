@@ -288,11 +288,14 @@ export type Database = {
         Row: {
           atualizado_em: string
           categoria_id: string | null
+          condicao_preco: string | null
           criado_em: string
+          desconto_rotulo: string | null
           id: string
           imagem_url: string | null
           item_id: string | null
           legenda: string | null
+          lida_em: string | null
           link_afiliado: string
           link_formulario_id: string | null
           motivo: string | null
@@ -303,15 +306,19 @@ export type Database = {
           preco_original: number | null
           status: string
           titulo: string | null
+          url_produto: string | null
         }
         Insert: {
           atualizado_em?: string
           categoria_id?: string | null
+          condicao_preco?: string | null
           criado_em?: string
+          desconto_rotulo?: string | null
           id?: string
           imagem_url?: string | null
           item_id?: string | null
           legenda?: string | null
+          lida_em?: string | null
           link_afiliado: string
           link_formulario_id?: string | null
           motivo?: string | null
@@ -322,15 +329,19 @@ export type Database = {
           preco_original?: number | null
           status?: string
           titulo?: string | null
+          url_produto?: string | null
         }
         Update: {
           atualizado_em?: string
           categoria_id?: string | null
+          condicao_preco?: string | null
           criado_em?: string
+          desconto_rotulo?: string | null
           id?: string
           imagem_url?: string | null
           item_id?: string | null
           legenda?: string | null
+          lida_em?: string | null
           link_afiliado?: string
           link_formulario_id?: string | null
           motivo?: string | null
@@ -341,6 +352,7 @@ export type Database = {
           preco_original?: number | null
           status?: string
           titulo?: string | null
+          url_produto?: string | null
         }
         Relationships: [
           {

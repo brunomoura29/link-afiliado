@@ -39,7 +39,7 @@ const progresso = computed(() => {
 
       <span v-if="oferta.status === 'rejeitada' && oferta.motivo" class="mt-0.5 line-clamp-1 text-label text-status-rejeitada">{{ oferta.motivo }}</span>
       <span v-else-if="oferta.preco != null" class="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-        <span class="font-semibold">{{ formatarPreco(oferta.preco) }}</span>
+        <span class="font-semibold">{{ formatarPreco(oferta.preco) }}<span v-if="oferta.condicao" class="text-label font-normal text-muted"> {{ oferta.condicao }}</span></span>
         <span v-if="oferta.original" class="text-label text-muted line-through">{{ formatarPreco(oferta.original) }}</span>
         <span v-if="desconto" class="text-label font-semibold text-status-aprovada">-{{ desconto }}%</span>
       </span>

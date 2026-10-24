@@ -44,6 +44,6 @@ export default defineEventHandler(async (event) => {
 
   await admin.from('links_formulario').update({ ultimo_uso: new Date().toISOString() }).eq('id', link.id)
 
-  // TODO: disparar o enriquecimento (ler a página do produto) — próxima fase
+  processarEmSegundoPlano(event, oferta.id)
   return oferta
 })
