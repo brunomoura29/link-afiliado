@@ -1,7 +1,7 @@
 // Ofertas recebidas (formulário público ou painel) e o andamento de cada uma.
 // Por enquanto simulado. TODO (Supabase): ofertas + postagens + envios; status real
 // vem do enriquecimento, do filtro de regras e da fila de envio.
-import type { Plataforma, StatusPostagem } from '~/utils/plataforma'
+import type { Plataforma, StatusPostagem } from '#shared/utils/plataforma'
 
 export interface Envio {
   grupo: string

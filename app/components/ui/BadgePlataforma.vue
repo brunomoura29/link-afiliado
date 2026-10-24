@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Plataforma } from '~/utils/plataforma'
+import type { Plataforma } from '#shared/utils/plataforma'
 
 // Shopee e Mercado Livre seguem a skill de design (fundo tint).
 // As demais lojas usam badge neutro com ponto colorido, para não encher a tela de cores de marca.

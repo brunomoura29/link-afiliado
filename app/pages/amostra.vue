@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Plataforma } from '~/utils/plataforma'
+import type { Plataforma } from '#shared/utils/plataforma'
 
 useHead({ title: 'Amostra de design · LinkAfiliado' })
 

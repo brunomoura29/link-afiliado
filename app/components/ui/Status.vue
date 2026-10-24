@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StatusPostagem } from '~/utils/plataforma'
+import type { StatusPostagem } from '#shared/utils/plataforma'
 
 defineProps<{ status: StatusPostagem }>()
 

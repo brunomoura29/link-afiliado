@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import type { Plataforma, StatusPostagem } from '~/utils/plataforma'
+import type { Plataforma, StatusPostagem } from '#shared/utils/plataforma'
 
-// Formulário público que o assistente usa (sem login). Tokens de exemplo: "demo".
+// Formulário público que o assistente usa (sem login). Os dados vêm do servidor,
+// que valida o token (server/api/publico/formulario).
 const rota = useRoute()
 const token = String(rota.params.token)
 const toast = useToast()
 const { disparar } = useConfete()
 
-const { data: form } = await useAsyncData(`form-${token}`, async () => buscarFormularioExemplo(token))
-if (import.meta.server && !form.value) setResponseStatus(useRequestEvent()!, 404)
+const { data: form, error: erroForm } = await useFetch(`/api/publico/formulario/${token}`, { key: `form-${token}` })
+if (import.meta.server && erroForm.value) setResponseStatus(useRequestEvent()!, 404)
 
 useHead({ title: () => (form.value ? `Enviar oferta · ${form.value.dono}` : 'Link inválido') })
 useSeoMeta({ robots: 'noindex, nofollow' })
 
 // Estado
+const linkInvalido = ref(false) // desativado enquanto a página estava aberta
 const categoria = ref('')
 const link = ref('')
 const erroLink = ref('')
@@ -21,7 +23,7 @@ const erroCategoria = ref('')
 const salvando = ref(false)
 const salvo = ref(false)
 const botao = ref<{ $el: HTMLElement }>()
-const enviadas = ref<{ id: number, link: string, plataforma: Plataforma, categoria: string, status: StatusPostagem }[]>([])
+const enviadas = ref<{ id: string, link: string, plataforma: Plataforma, categoria: string, status: StatusPostagem, titulo: string | null }[]>([])
 
 const plataforma = computed(() => detectarPlataforma(link.value))
 const nomeCategoria = computed(() => form.value?.categorias.find(c => c.id === categoria.value)?.nome ?? '')
@@ -62,36 +64,69 @@ async function salvar() {
     erroLink.value = link.value ? 'Esse não parece um link válido (precisa começar com https://)' : 'Cole o link de afiliado'
     return
   }
-  if (enviadas.value.some(e => e.link === normalizarLink(link.value))) {
+  const linkNormalizado = normalizarLink(link.value)
+  if (enviadas.value.some(e => e.link === linkNormalizado)) {
     erroLink.value = 'Você já enviou esse link agora há pouco'
     return
   }
 
   salvando.value = true
-  await new Promise(r => setTimeout(r, 1100)) // TODO: chamar a função do servidor que valida o token
+  let oferta: { id: string, status: string }
+  try {
+    oferta = await $fetch(`/api/publico/formulario/${token}`, {
+      method: 'POST',
+      body: { categoriaId: categoria.value, link: linkNormalizado }
+    })
+  } catch (e) {
+    salvando.value = false
+    const { statusCode, statusMessage } = e as { statusCode?: number, statusMessage?: string }
+    if (statusCode === 404) linkInvalido.value = true
+    else if (statusCode === 409) erroLink.value = 'Esse link já foi enviado antes'
+    else if (statusCode === 429) toast.erro('Muitas ofertas em pouco tempo', 'Espere um minuto e tente de novo.')
+    else if (statusMessage === 'categoria_invalida') erroCategoria.value = 'Essa categoria não está mais disponível'
+    else if (statusMessage === 'link_invalido_oferta') erroLink.value = 'Esse não parece um link válido'
+    else toast.erro('Não foi possível enviar', 'Verifique sua internet e tente de novo.')
+    return
+  }
   salvando.value = false
   salvo.value = true
   disparar(botao.value?.$el ?? null)
   navigator.vibrate?.(30)
 
-  const item = { id: Date.now(), link: normalizarLink(link.value), plataforma: plataforma.value, categoria: nomeCategoria.value, status: 'pendente' as StatusPostagem }
-  enviadas.value.unshift(item)
-  // Simulação: o backend vai atualizar o status de verdade
-  setTimeout(() => {
-    const e = enviadas.value.find(x => x.id === item.id)
-    if (e) e.status = 'aprovada'
-  }, 2500)
-
+  enviadas.value.unshift({
+    id: oferta.id,
+    link: linkNormalizado,
+    plataforma: plataforma.value,
+    categoria: nomeCategoria.value,
+    status: oferta.status as StatusPostagem,
+    titulo: null
+  })
   setTimeout(() => {
     salvo.value = false
     link.value = ''
   }, 1600)
 }
+
+// Acompanha o andamento das ofertas enviadas nesta sessão
+let consulta: ReturnType<typeof setInterval> | undefined
+async function atualizarStatus() {
+  const pendentes = enviadas.value.filter(e => e.status === 'pendente' || e.status === 'aprovada')
+  if (!pendentes.length) return
+  try {
+    const lista = await $fetch(`/api/publico/formulario/${token}/status`, { query: { ids: pendentes.map(e => e.id).join(',') } })
+    for (const s of lista) {
+      const e = enviadas.value.find(x => x.id === s.id)
+      if (e) Object.assign(e, { status: s.status as StatusPostagem, titulo: s.titulo })
+    }
+  } catch {}
+}
+onMounted(() => (consulta = setInterval(atualizarStatus, 5000)))
+onBeforeUnmount(() => clearInterval(consulta))
 </script>
 
 <template>
   <!-- Link inválido -->
-  <div v-if="!form" class="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
+  <div v-if="!form || linkInvalido" class="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
     <span class="mb-5 flex size-16 animate-pop items-center justify-center rounded-full bg-status-rejeitada/10 text-status-rejeitada">
       <UiIcone nome="link" :tamanho="28" />
     </span>
@@ -119,6 +154,10 @@ async function salvar() {
         <p class="mt-1 text-muted">Escolha a categoria e cole o link de afiliado.</p>
       </div>
 
+      <p v-if="!form.categorias.length" class="flex animate-fade-up items-start gap-2 rounded border border-line bg-surface p-3 text-label">
+        <UiIcone nome="info" :tamanho="16" class="mt-0.5 shrink-0 text-muted" />
+        Ainda não há categorias para escolher. Peça para {{ form.dono }} criar uma no painel.
+      </p>
       <div class="animate-fade-up [animation-delay:120ms]">
         <UiSelecao
           v-model="categoria"
@@ -175,7 +214,8 @@ async function salvar() {
               :style="{ background: corPlataforma(e.plataforma) }"
             />
             <span class="min-w-0 flex-1">
-              <span class="block truncate font-mono text-label">{{ e.link.replace(/^https?:\/\//, '') }}</span>
+              <span v-if="e.titulo" class="block truncate text-label font-semibold">{{ e.titulo }}</span>
+              <span v-else class="block truncate font-mono text-label">{{ e.link.replace(/^https?:\/\//, '') }}</span>
               <span class="block text-label text-muted">{{ e.categoria }}</span>
             </span>
             <Transition name="marcado" mode="out-in">

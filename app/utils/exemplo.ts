@@ -1,17 +1,5 @@
 // Dados de exemplo enquanto o backend não existe. Substituir por chamadas ao Supabase.
-import type { Plataforma } from './plataforma'
-
-export interface CategoriaPublica {
-  id: string
-  nome: string
-  emoji: string
-}
-
-export interface FormularioPublico {
-  dono: string
-  nomeLink: string
-  categorias: CategoriaPublica[]
-}
+import type { Plataforma } from '#shared/utils/plataforma'
 
 export interface OfertaPublica {
   titulo: string
@@ -31,20 +19,6 @@ export interface GrupoPublico {
   ofertasPorDia: number
   convite: string | null // null = todos os grupos lotados
   ofertas: OfertaPublica[]
-}
-
-const CATEGORIAS: CategoriaPublica[] = [
-  { id: 'casa', nome: 'Casa e Cozinha', emoji: '🏠' },
-  { id: 'eletronicos', nome: 'Eletrônicos', emoji: '🎧' },
-  { id: 'moda', nome: 'Moda', emoji: '👗' },
-  { id: 'beleza', nome: 'Beleza', emoji: '💄' },
-  { id: 'infantil', nome: 'Infantil', emoji: '🧸' },
-  { id: 'pet', nome: 'Pet', emoji: '🐶' }
-]
-
-const FORMULARIOS: Record<string, FormularioPublico> = {
-  demo: { dono: 'Loja da Ana', nomeLink: 'Assistente João', categorias: CATEGORIAS },
-  a8Kx92mPq7Zt: { dono: 'Loja da Ana', nomeLink: 'Assistente João', categorias: CATEGORIAS }
 }
 
 const OFERTAS_CASA: OfertaPublica[] = [
@@ -85,5 +59,4 @@ export const PAINEL_EXEMPLO = {
   linkEntrada: 'https://linkafiliado.app/g/casa-cozinha'
 }
 
-export const buscarFormularioExemplo = (token: string) => FORMULARIOS[token] ?? null
 export const buscarGrupoExemplo = (slug: string) => GRUPOS[slug] ?? null

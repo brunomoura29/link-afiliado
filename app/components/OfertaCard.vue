@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Plataforma, StatusPostagem } from '~/utils/plataforma'
+import type { Plataforma, StatusPostagem } from '#shared/utils/plataforma'
 
 // `status` só aparece no painel; nas páginas públicas fica sem.
 defineProps<{
