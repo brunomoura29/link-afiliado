@@ -50,7 +50,7 @@ async function tentar() {
   processando.value = 'tentar'
   try {
     await tentarNovamente(props.oferta)
-    toast.info('Na fila de novo', 'Vamos tentar ler o produto outra vez.')
+    toast.info('Lendo o produto de novo', 'Em alguns segundos a oferta atualiza sozinha.')
   } catch {
     falhou()
   }
@@ -111,6 +111,18 @@ const ICONE_ENVIO = {
         <p class="text-title text-status-aprovada">{{ desconto ? `${desconto}%` : '—' }}</p>
         <p class="text-[12px] text-muted">desconto</p>
       </div>
+    </div>
+
+    <!-- Pendente -->
+    <div v-if="oferta.status === 'pendente'" class="flex flex-col gap-3 rounded border border-line bg-surface p-4">
+      <p class="flex items-start gap-2 text-label">
+        <UiSpinner :tamanho="16" class="mt-0.5 shrink-0 text-muted" />
+        <span>Lendo a página do produto e escrevendo a legenda. Costuma levar poucos segundos.</span>
+      </p>
+      <UiBotao variante="secundario" tamanho="sm" class="self-start" :carregando="processando === 'tentar'" @click="tentar">
+        <UiIcone nome="atualizar" :tamanho="16" /> Ler de novo
+        <template #carregando>Pedindo…</template>
+      </UiBotao>
     </div>
 
     <!-- Rejeitada -->

@@ -88,6 +88,16 @@ export function useOfertas() {
     o.motivo = undefined
   }
 
+  // Pede ao servidor para reler ofertas paradas em "pendente" (rede de segurança)
+  async function relerParadas() {
+    try {
+      const { relendo } = await $fetch('/api/ofertas/pendentes', { method: 'POST' })
+      return relendo
+    } catch {
+      return 0
+    }
+  }
+
   async function excluir(o: Oferta) {
     const { error } = await supabase.from('ofertas').delete().eq('id', o.id)
     if (error) throw error
@@ -112,5 +122,5 @@ export function useOfertas() {
     return false
   }
 
-  return { ofertas, carregar, adicionar, tentarNovamente, excluir, novaLegenda, enviarAgora }
+  return { ofertas, carregar, adicionar, tentarNovamente, relerParadas, excluir, novaLegenda, enviarAgora }
 }

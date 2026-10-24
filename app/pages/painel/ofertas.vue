@@ -4,15 +4,19 @@ import type { Oferta } from '~/composables/useOfertas'
 definePageMeta({ layout: 'painel', pageTransition: { name: 'pagina', mode: 'out-in' } })
 useHead({ title: 'Ofertas · LinkAfiliado' })
 
-const { ofertas, carregar } = useOfertas()
+const { ofertas, carregar, relerParadas } = useOfertas()
 await useAsyncData('ofertas', carregar)
 
 // Enquanto houver oferta andando (lendo produto ou na fila), atualiza a cada 15s
+// e pede para reler as que ficaram paradas em "pendente"
 let atualizacao: ReturnType<typeof setInterval> | undefined
+async function atualizar() {
+  if (ofertas.value.some(o => o.status === 'pendente')) await relerParadas()
+  if (ofertas.value.some(o => o.status === 'pendente' || o.status === 'aprovada')) await carregar().catch(() => {})
+}
 onMounted(() => {
-  atualizacao = setInterval(() => {
-    if (ofertas.value.some(o => o.status === 'pendente' || o.status === 'aprovada')) carregar().catch(() => {})
-  }, 15_000)
+  atualizar()
+  atualizacao = setInterval(atualizar, 15_000)
 })
 onBeforeUnmount(() => clearInterval(atualizacao))
 const { categorias } = useGrupos()
