@@ -1,13 +1,14 @@
-// Grupos do WhatsApp do cliente e a ligação com as categorias. Por enquanto simulado.
+// Categorias (Supabase: categorias) e grupos do WhatsApp (Supabase: whatsapp_destinos).
+// Os grupos chegam pela UazAPI; até ela ser ligada, a lista fica vazia.
 // TODO (UazAPI, pedir a doc): listar grupos, nº de participantes, se o número é admin,
 // obter/revogar convite, criar grupo e configurar nome/foto/descrição/"só admins".
-// TODO (Supabase): whatsapp_destinos + categorias.
+import type { Tables, TablesInsert } from '~/types/database.types'
 
 export interface CategoriaGrupo {
   id: string
   nome: string
   emoji: string
-  slug: string // link de entrada /g/<slug>
+  slug: string // link de entrada /g/<slug> (único no sistema todo)
   palavraChave: string // "QUERO CASA" → responde com o convite
   descricao: string // texto da página de entrada
   ativa: boolean // pausada = nada é enviado para os grupos dela
@@ -30,29 +31,62 @@ export interface Grupo {
 
 // Acima disso o grupo para de receber novos membros e o próximo assume
 export const LIMITE_ENTRADA = .9
-export const URL_BASE = 'https://linkafiliado.app'
 
-const CATEGORIAS: CategoriaGrupo[] = [
-  { id: 'casa', nome: 'Casa e Cozinha', emoji: '🏠', slug: 'casa-cozinha', palavraChave: 'QUERO CASA', descricao: 'Os melhores descontos para sua casa, todos os dias.', ativa: true, autoCriar: true, padraoNome: 'Achadinhos Casa #', soAdmins: true },
-  { id: 'eletronicos', nome: 'Eletrônicos', emoji: '🎧', slug: 'eletronicos', palavraChave: 'QUERO TECH', descricao: 'Fones, carregadores e gadgets em promoção.', ativa: true, autoCriar: false, padraoNome: 'Tech Ofertas #', soAdmins: true },
-  { id: 'beleza', nome: 'Beleza', emoji: '💄', slug: 'beleza', palavraChave: 'QUERO BELEZA', descricao: 'Maquiagem, skincare e perfumes com desconto.', ativa: true, autoCriar: false, padraoNome: 'Beleza Barata #', soAdmins: true }
-]
+const daLinhaCategoria = (c: Tables<'categorias'>): CategoriaGrupo => ({
+  id: c.id,
+  nome: c.nome,
+  emoji: c.emoji,
+  slug: c.slug,
+  palavraChave: c.palavra_chave ?? '',
+  descricao: c.descricao,
+  ativa: c.ativa,
+  autoCriar: c.auto_criar,
+  padraoNome: c.padrao_nome,
+  soAdmins: c.so_admins
+})
 
-const GRUPOS: Grupo[] = [
-  { id: 'g1', nome: 'Achadinhos Casa #1', membros: 1024, capacidade: 1024, admin: true, categoriaId: 'casa', ordem: 1, recebeOfertas: true, convite: 'https://chat.whatsapp.com/Ab12Cd34Ef56' },
-  { id: 'g2', nome: 'Achadinhos Casa #2', membros: 823, capacidade: 1024, admin: true, categoriaId: 'casa', ordem: 2, recebeOfertas: true, convite: 'https://chat.whatsapp.com/Gh78Ij90Kl12' },
-  { id: 'g3', nome: 'Achadinhos Casa #3', membros: 12, capacidade: 1024, admin: true, categoriaId: 'casa', ordem: 3, recebeOfertas: true, convite: 'https://chat.whatsapp.com/Mn34Op56Qr78' },
-  { id: 'g4', nome: 'Tech Ofertas 🎧', membros: 640, capacidade: 1024, admin: true, categoriaId: 'eletronicos', ordem: 1, recebeOfertas: true, convite: 'https://chat.whatsapp.com/St90Uv12Wx34' },
-  { id: 'g5', nome: 'Beleza Barata 💄', membros: 310, capacidade: 1024, admin: false, categoriaId: 'beleza', ordem: 1, recebeOfertas: true, convite: null },
-  { id: 'g6', nome: 'Promo Geral VIP', membros: 455, capacidade: 1024, admin: true, categoriaId: null, ordem: 1, recebeOfertas: false, convite: 'https://chat.whatsapp.com/Yz56Ab78Cd90' },
-  { id: 'g7', nome: 'Família Souza', membros: 18, capacidade: 1024, admin: false, categoriaId: null, ordem: 2, recebeOfertas: false, convite: null }
-]
+const paraLinhaCategoria = (c: CategoriaGrupo): TablesInsert<'categorias'> => ({
+  nome: c.nome.trim(),
+  emoji: c.emoji,
+  slug: c.slug,
+  palavra_chave: c.palavraChave.trim() || null,
+  descricao: c.descricao.trim(),
+  ativa: c.ativa,
+  auto_criar: c.autoCriar,
+  padrao_nome: c.padraoNome.trim(),
+  so_admins: c.soAdmins
+})
 
-const espera = (ms: number) => new Promise(r => setTimeout(r, ms))
+const daLinhaGrupo = (g: Tables<'whatsapp_destinos'>): Grupo => ({
+  id: g.id,
+  nome: g.nome,
+  membros: g.membros,
+  capacidade: g.capacidade,
+  admin: g.admin,
+  categoriaId: g.categoria_id,
+  ordem: g.ordem,
+  recebeOfertas: g.recebe_ofertas,
+  convite: g.convite_url
+})
+
+export type ErroSalvarCategoria = 'slug' | 'palavraChave' | 'outro' | null
 
 export function useGrupos() {
-  const categorias = useState<CategoriaGrupo[]>('categorias-grupos', () => structuredClone(CATEGORIAS))
-  const grupos = useState<Grupo[]>('grupos', () => structuredClone(GRUPOS))
+  const supabase = useSupabaseClient()
+  const toast = useToast()
+  const categorias = useState<CategoriaGrupo[]>('categorias', () => [])
+  const grupos = useState<Grupo[]>('grupos', () => [])
+
+  async function carregar() {
+    const [cats, dests] = await Promise.all([
+      supabase.from('categorias').select('*').order('criado_em'),
+      supabase.from('whatsapp_destinos').select('*').eq('tipo', 'grupo').order('ordem')
+    ])
+    if (cats.error || dests.error) throw cats.error ?? dests.error
+    categorias.value = cats.data.map(daLinhaCategoria)
+    grupos.value = dests.data.map(daLinhaGrupo)
+    return true
+  }
 
   const daCategoria = (categoriaId: string | null) =>
     grupos.value.filter(g => g.categoriaId === categoriaId).sort((a, b) => a.ordem - b.ordem)
@@ -64,68 +98,33 @@ export function useGrupos() {
     return daCategoria(categoriaId).find(g => g.admin && g.convite && !lotado(g)) ?? null
   }
 
-  const linkEntrada = (c: CategoriaGrupo) => `${URL_BASE}/g/${c.slug}`
+  const urlBase = useUrlBase()
+  const linkEntrada = (c: CategoriaGrupo) => `${urlBase}/g/${c.slug}`
 
-  async function sincronizar() {
-    await espera(1300)
-    return grupos.value.length
-  }
+  // ── Categorias ──
 
-  function definirCategoria(g: Grupo, categoriaId: string | null) {
-    g.categoriaId = categoriaId
-    g.ordem = (daCategoria(categoriaId).filter(x => x.id !== g.id).at(-1)?.ordem ?? 0) + 1
-    if (categoriaId) g.recebeOfertas = true
-  }
-
-  function mover(g: Grupo, direcao: -1 | 1) {
-    const lista = daCategoria(g.categoriaId)
-    const i = lista.findIndex(x => x.id === g.id)
-    const outro = lista[i + direcao]
-    if (!outro) return
-    ;[g.ordem, outro.ordem] = [outro.ordem, g.ordem]
-  }
-
-  async function novoConvite(g: Grupo) {
-    await espera(800)
-    g.convite = `https://chat.whatsapp.com/${Math.random().toString(36).slice(2, 14)}`
-  }
-
-  // "Achadinhos Casa #" → "Achadinhos Casa #4"
-  function proximoNomeGrupo(c: CategoriaGrupo) {
-    const n = daCategoria(c.id).length + 1
-    const padrao = c.padraoNome.trim() || c.nome
-    return padrao.includes('#') ? padrao.replace('#', `#${n}`) : `${padrao} ${n}`
-  }
-
-  async function criarGrupo(c: CategoriaGrupo, nome: string, soAdmins: boolean) {
-    await espera(1600)
-    const g: Grupo = {
-      id: `g${Date.now()}`,
-      nome: nome.trim(),
-      membros: 1, // o próprio número
-      capacidade: 1024,
-      admin: true,
-      categoriaId: c.id,
-      ordem: (daCategoria(c.id).at(-1)?.ordem ?? 0) + 1,
-      recebeOfertas: true,
-      convite: `https://chat.whatsapp.com/${Math.random().toString(36).slice(2, 14)}`
+  async function salvarCategoria(dados: CategoriaGrupo, nova: boolean): Promise<ErroSalvarCategoria> {
+    const linha = paraLinhaCategoria(dados)
+    const { data, error } = nova
+      ? await supabase.from('categorias').insert(linha).select().single()
+      : await supabase.from('categorias').update(linha).eq('id', dados.id).select().single()
+    if (error) {
+      // Índices únicos: endereço (no sistema todo) e palavra-chave (por cliente)
+      if (error.code === '23505') return error.message.includes('slug') ? 'slug' : 'palavraChave'
+      return 'outro'
     }
-    void soAdmins // TODO: configurar "só admins enviam" na UazAPI
-    grupos.value.push(g)
-    return g
+    const salva = daLinhaCategoria(data)
+    const i = categorias.value.findIndex(c => c.id === salva.id)
+    if (i >= 0) categorias.value[i] = salva
+    else categorias.value.push(salva)
+    return null
   }
 
-  // Cria ou atualiza
-  async function salvarCategoria(dados: CategoriaGrupo) {
-    await espera(700)
-    const existente = categorias.value.find(c => c.id === dados.id)
-    if (existente) Object.assign(existente, dados)
-    else categorias.value.push({ ...dados })
-  }
-
-  // Os grupos dela voltam para "sem categoria"
+  // Os grupos dela voltam para "sem categoria" e param de receber ofertas
   async function excluirCategoria(id: string) {
-    await espera(700)
+    await supabase.from('whatsapp_destinos').update({ recebe_ofertas: false }).eq('categoria_id', id)
+    const { error } = await supabase.from('categorias').delete().eq('id', id)
+    if (error) throw error
     for (const g of grupos.value) {
       if (g.categoriaId === id) {
         g.categoriaId = null
@@ -135,8 +134,59 @@ export function useGrupos() {
     categorias.value = categorias.value.filter(c => c.id !== id)
   }
 
+  // ── Grupos ──
+
+  // Muda no banco e na tela; se falhar, desfaz na tela e avisa
+  async function atualizarGrupo(g: Grupo, mudancas: Partial<Grupo>) {
+    const antes = { ...g }
+    Object.assign(g, mudancas)
+    const { error } = await supabase.from('whatsapp_destinos').update({
+      categoria_id: g.categoriaId,
+      ordem: g.ordem,
+      recebe_ofertas: g.recebeOfertas
+    }).eq('id', g.id)
+    if (error) {
+      Object.assign(g, antes)
+      toast.erro('Não foi possível salvar', 'Verifique sua internet e tente de novo.')
+    }
+  }
+
+  const definirOfertas = (g: Grupo, recebe: boolean) => atualizarGrupo(g, { recebeOfertas: recebe })
+
+  function definirCategoria(g: Grupo, categoriaId: string | null) {
+    const ordem = (daCategoria(categoriaId).filter(x => x.id !== g.id).at(-1)?.ordem ?? 0) + 1
+    return atualizarGrupo(g, { categoriaId, ordem, recebeOfertas: !!categoriaId })
+  }
+
+  async function mover(g: Grupo, direcao: -1 | 1) {
+    const lista = daCategoria(g.categoriaId)
+    const outro = lista[lista.findIndex(x => x.id === g.id) + direcao]
+    if (!outro) return
+    const [a, b] = [g.ordem, outro.ordem]
+    await Promise.all([atualizarGrupo(g, { ordem: b }), atualizarGrupo(outro, { ordem: a })])
+  }
+
+  // "Achadinhos Casa #" → "Achadinhos Casa #4"
+  function proximoNomeGrupo(c: CategoriaGrupo) {
+    const n = daCategoria(c.id).length + 1
+    const padrao = c.padraoNome.trim() || c.nome
+    return padrao.includes('#') ? padrao.replace('#', `#${n}`) : `${padrao} ${n}`
+  }
+
+  // Dependem da UazAPI (ainda não ligada)
+  const depoisDaUazapi = () => {
+    toast.info('Disponível em breve', 'Funciona quando o WhatsApp for ligado pela UazAPI.')
+    return null
+  }
+  // null = não disponível ainda (já avisou com toast)
+  const sincronizar = async (): Promise<number | null> => depoisDaUazapi()
+  const novoConvite = async (_g: Grupo): Promise<string | null> => depoisDaUazapi()
+  const criarGrupo = async (_c: CategoriaGrupo, _nome: string, _soAdmins: boolean): Promise<Grupo | null> => depoisDaUazapi()
+
   return {
-    categorias, grupos, daCategoria, lotado, entradaAtiva, linkEntrada, sincronizar, definirCategoria, mover, novoConvite,
-    proximoNomeGrupo, criarGrupo, salvarCategoria, excluirCategoria
+    categorias, grupos, carregar, daCategoria, lotado, entradaAtiva, linkEntrada,
+    salvarCategoria, excluirCategoria,
+    definirOfertas, definirCategoria, mover, proximoNomeGrupo,
+    sincronizar, novoConvite, criarGrupo
   }
 }

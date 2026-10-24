@@ -44,8 +44,20 @@ async function salvar() {
   if (erros.nome || erros.slug || erros.palavraChave) return
 
   salvando.value = true
-  await salvarCategoria({ ...r, nome: r.nome.trim(), palavraChave: r.palavraChave.trim() })
+  const erro = await salvarCategoria({ ...r }, novo)
   salvando.value = false
+  if (erro === 'slug') {
+    erros.slug = 'Esse endereço já está em uso. Tente outro.'
+    return
+  }
+  if (erro === 'palavraChave') {
+    erros.palavraChave = 'Essa palavra-chave já é de outra categoria'
+    return
+  }
+  if (erro) {
+    toast.erro('Não foi possível salvar', 'Verifique sua internet e tente de novo.')
+    return
+  }
   salvo.value = true
   toast.sucesso(novo ? 'Categoria criada' : 'Categoria salva', novo ? 'Agora crie ou escolha os grupos dela.' : undefined)
   setTimeout(() => emit('fechar'), 500)
@@ -55,9 +67,16 @@ const confirmandoExclusao = ref(false)
 const excluindo = ref(false)
 async function excluir() {
   excluindo.value = true
-  await excluirCategoria(r.id)
+  const tinhaGrupos = qtdGrupos.value > 0
+  try {
+    await excluirCategoria(r.id)
+  } catch {
+    excluindo.value = false
+    toast.erro('Não foi possível excluir', 'Verifique sua internet e tente de novo.')
+    return
+  }
   excluindo.value = false
-  toast.info('Categoria excluída', qtdGrupos.value ? 'Os grupos dela foram para "Sem categoria".' : undefined)
+  toast.info('Categoria excluída', tinhaGrupos ? 'Os grupos dela foram para "Sem categoria".' : undefined)
   emit('fechar')
 }
 </script>

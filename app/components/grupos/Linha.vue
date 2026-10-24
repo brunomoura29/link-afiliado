@@ -2,7 +2,7 @@
 import type { Grupo } from '~/composables/useGrupos'
 
 const props = defineProps<{ grupo: Grupo, posicao?: number, entradaAtiva?: boolean, lotado?: boolean, semCategoria?: boolean }>()
-defineEmits<{ abrir: [] }>()
+defineEmits<{ abrir: [], ofertas: [recebe: boolean] }>()
 
 const ocupacao = computed(() => Math.min(props.grupo.membros / props.grupo.capacidade, 1))
 const iniciais = computed(() => props.grupo.nome.replace(/[^\p{L}\p{N}\s]/gu, '').trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase())
@@ -45,6 +45,6 @@ const iniciais = computed(() => props.grupo.nome.replace(/[^\p{L}\p{N}\s]/gu, ''
       </span>
     </button>
     <UiBotao v-if="semCategoria" variante="secundario" tamanho="sm" @click="$emit('abrir')">Definir</UiBotao>
-    <UiInterruptor v-else v-model="grupo.recebeOfertas" :aria-label="`Enviar ofertas para ${grupo.nome}`" />
+    <UiInterruptor v-else :model-value="grupo.recebeOfertas" @update:model-value="$emit('ofertas', $event)" :aria-label="`Enviar ofertas para ${grupo.nome}`" />
   </div>
 </template>

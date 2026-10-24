@@ -6,7 +6,10 @@ useHead({ title: 'Links · LinkAfiliado' })
 
 const toast = useToast()
 const { disparar } = useConfete()
-const { links, urlDo, criar, regenerar, excluir } = useLinks()
+const { links, urlDo, carregar, criar, atualizar, regenerar, excluir } = useLinks()
+await useAsyncData('links-formulario', carregar)
+
+const falhou = () => toast.erro('Não foi possível salvar', 'Verifique sua internet e tente de novo.')
 
 const ativos = computed(() => links.value.filter(l => l.ativo).length)
 const iniciais = (nome: string) => nome.replace(/[^\p{L}\p{N}\s]/gu, '').trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase()
@@ -49,7 +52,13 @@ async function criarLink() {
     return
   }
   criando.value = true
-  const l = await criar(nomeNovo.value)
+  let l: LinkFormulario
+  try {
+    l = await criar(nomeNovo.value)
+  } catch {
+    criando.value = false
+    return falhou()
+  }
   criando.value = false
   disparar(botaoCriar.value?.$el ?? null)
   criado.value = l
@@ -60,23 +69,53 @@ const selecionado = ref<LinkFormulario | null>(null)
 const detalhesAberto = computed({ get: () => !!selecionado.value, set: v => !v && (selecionado.value = null) })
 const confirmando = ref<'regenerar' | 'excluir' | null>(null)
 const processando = ref(false)
-watch(selecionado, () => (confirmando.value = null))
-// Só avisa quando a chave muda no mesmo link (não ao abrir outro)
-watch(() => [selecionado.value?.id, selecionado.value?.ativo] as const, ([id, ativo], [idAntes, antes]) => {
-  if (!id || id !== idAntes || ativo === antes) return
-  toast.info(ativo ? 'Link reativado' : 'Link desativado', ativo ? 'Quem tem o link volta a conseguir enviar.' : 'Quem tem o link não consegue mais enviar ofertas.')
+// Nome é editado num rascunho e salvo ao sair do campo
+const nomeEdicao = ref('')
+watch(selecionado, (l) => {
+  confirmando.value = null
+  nomeEdicao.value = l?.nome ?? ''
 })
+async function salvarNome() {
+  const l = selecionado.value
+  const nome = nomeEdicao.value.trim()
+  if (!l || nome === l.nome) return
+  if (nome.length < 2) {
+    nomeEdicao.value = l.nome
+    return
+  }
+  try {
+    await atualizar(l, { nome })
+    toast.sucesso('Nome salvo')
+  } catch {
+    nomeEdicao.value = l.nome
+    falhou()
+  }
+}
+async function alternarAtivo(ativo: boolean) {
+  const l = selecionado.value
+  if (!l) return
+  try {
+    await atualizar(l, { ativo })
+    toast.info(ativo ? 'Link reativado' : 'Link desativado', ativo ? 'Quem tem o link volta a conseguir enviar.' : 'Quem tem o link não consegue mais enviar ofertas.')
+  } catch {
+    falhou()
+  }
+}
 async function confirmar() {
   const l = selecionado.value
   if (!l || !confirmando.value) return
   processando.value = true
-  if (confirmando.value === 'regenerar') {
-    await regenerar(l)
-    toast.sucesso('Link novo gerado', 'O antigo parou de funcionar. Mande o novo para o assistente.')
-  } else {
-    await excluir(l)
-    toast.info('Link excluído')
-    selecionado.value = null
+  try {
+    if (confirmando.value === 'regenerar') {
+      await regenerar(l)
+      toast.sucesso('Link novo gerado', 'O antigo parou de funcionar. Mande o novo para o assistente.')
+    } else {
+      await excluir(l)
+      toast.info('Link excluído')
+      selecionado.value = null
+    }
+  } catch {
+    falhou()
   }
   processando.value = false
   confirmando.value = null
@@ -193,9 +232,10 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
       :descricao="selecionado ? `Criado ${tempoRelativo(selecionado.criadoEm)} · ${selecionado.ofertasTotal} ofertas enviadas` : ''"
     >
       <div v-if="selecionado" class="flex flex-col gap-5">
-        <UiCampo v-model="selecionado.nome" rotulo="Nome" />
+        <UiCampo v-model="nomeEdicao" rotulo="Nome" @focusout="salvarNome" />
         <UiInterruptor
-          v-model="selecionado.ativo"
+          :model-value="selecionado.ativo"
+          @update:model-value="alternarAtivo"
           rotulo="Link ativo"
           descricao="Desativado, quem tem o link vê &quot;Esse link não funciona mais&quot;."
         />

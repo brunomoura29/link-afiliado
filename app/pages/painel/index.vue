@@ -42,10 +42,18 @@ async function compartilhar(titulo: string, url: string, chave: string) {
   }
 }
 
-const LINKS = [
-  { chave: 'form', titulo: 'Formulário do assistente', descricao: 'Mande para quem vai cadastrar as ofertas.', url: painel.linkFormulario, icone: 'link' },
-  { chave: 'entrada', titulo: 'Entrada no grupo', descricao: 'Divulgue nas redes para ganhar membros.', url: painel.linkEntrada, icone: 'usuarios' }
-] as const
+// Primeiro link ativo e primeira categoria; sem eles, o cartão vira atalho para criar
+const { links, urlDo, carregar: carregarLinks } = useLinks()
+await useAsyncData('links-formulario', carregarLinks)
+const { linkEntrada } = useGrupos()
+const LINKS = computed(() => {
+  const form = links.value.find(l => l.ativo)
+  const cat = categorias.value.find(c => c.ativa)
+  return [
+    { chave: 'form', titulo: 'Formulário do assistente', descricao: 'Mande para quem vai cadastrar as ofertas.', url: form ? urlDo(form) : null, icone: 'link', criar: '/painel/links', textoCriar: 'Criar o primeiro link' },
+    { chave: 'entrada', titulo: 'Entrada no grupo', descricao: 'Divulgue nas redes para ganhar membros.', url: cat ? linkEntrada(cat) : null, icone: 'usuarios', criar: '/painel/categorias', textoCriar: 'Criar a primeira categoria' }
+  ] as const
+})
 </script>
 
 <template>
@@ -101,7 +109,8 @@ const LINKS = [
             <p class="text-label text-muted">{{ l.descricao }}</p>
           </div>
         </div>
-        <p class="truncate rounded bg-surface px-3 py-2 font-mono text-label text-muted">{{ l.url.replace('https://', '') }}</p>
+        <template v-if="l.url">
+        <p class="truncate rounded bg-surface px-3 py-2 font-mono text-label text-muted">{{ l.url.replace(/^https?:\/\//, '') }}</p>
         <div class="grid grid-cols-2 gap-2">
           <UiBotao variante="secundario" tamanho="sm" @click="copiar(l.url, l.chave)">
             <UiIcone :nome="copiado === l.chave ? 'check' : 'copiar'" :tamanho="16" />
@@ -111,6 +120,10 @@ const LINKS = [
             <UiIcone nome="compartilhar" :tamanho="16" /> Compartilhar
           </UiBotao>
         </div>
+        </template>
+        <UiBotao v-else variante="secundario" tamanho="sm" @click="navigateTo(l.criar)">
+          <span class="text-[18px] leading-none">+</span> {{ l.textoCriar }}
+        </UiBotao>
       </UiCard>
     </section>
 

@@ -9,7 +9,7 @@ const { conectado } = useWhatsapp()
 const { disparar } = useConfete()
 const {
   categorias, grupos, daCategoria, lotado, entradaAtiva, linkEntrada, sincronizar, definirCategoria, mover, novoConvite,
-  proximoNomeGrupo, criarGrupo
+  proximoNomeGrupo, criarGrupo, definirOfertas
 } = useGrupos()
 
 // Busca
@@ -28,6 +28,7 @@ async function atualizar() {
   sincronizando.value = true
   const total = await sincronizar()
   sincronizando.value = false
+  if (total === null) return
   toast.sucesso('Grupos atualizados', `Encontramos ${total} grupos no seu WhatsApp.`)
 }
 
@@ -77,9 +78,10 @@ watch(selecionado, () => (confirmarConvite.value = false))
 async function gerarConvite() {
   if (!selecionado.value) return
   gerandoConvite.value = true
-  await novoConvite(selecionado.value)
+  const convite = await novoConvite(selecionado.value)
   gerandoConvite.value = false
   confirmarConvite.value = false
+  if (!convite) return
   toast.sucesso('Novo convite gerado', 'O link de entrada continua o mesmo.')
 }
 
@@ -112,6 +114,7 @@ async function criarNovoGrupo() {
   criandoGrupo.value = true
   const g = await criarGrupo(c, nomeNovoGrupo.value, soAdminsNovoGrupo.value)
   criandoGrupo.value = false
+  if (!g) return
   grupoCriado.value = true
   disparar(botaoCriar.value?.$el ?? null)
   toast.sucesso('Grupo criado no WhatsApp', `${g.nome} entrou no fim da fila do link de entrada.`)
@@ -210,6 +213,7 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
             :lotado="lotado(g)"
             :class="recemCriado === g.id && 'recem-criado'"
             @abrir="selecionado = g"
+            @ofertas="definirOfertas(g, $event)"
           />
         </TransitionGroup>
         <p v-else class="p-4 text-label text-muted">{{ busca ? 'Nenhum grupo encontrado.' : 'Nenhum grupo nesta categoria ainda.' }}</p>
@@ -255,7 +259,8 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
 
         <UiInterruptor
           v-if="selecionado.categoriaId"
-          v-model="selecionado.recebeOfertas"
+          :model-value="selecionado.recebeOfertas"
+          @update:model-value="definirOfertas(selecionado, $event)"
           rotulo="Enviar ofertas para este grupo"
           descricao="Desligue para pausar só este grupo."
         />

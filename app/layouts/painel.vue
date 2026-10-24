@@ -3,6 +3,8 @@ const rota = useRoute()
 const { escuro, alternar } = useTema()
 const { nome, email, iniciais, carregar, sair } = usePerfil()
 await useAsyncData('perfil', carregar)
+const { carregar: carregarGrupos } = useGrupos()
+await useAsyncData('categorias-grupos', carregarGrupos)
 const { conectado: whatsappConectado } = useWhatsapp()
 
 const ITENS = [

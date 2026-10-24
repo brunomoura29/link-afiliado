@@ -23,6 +23,12 @@ export default defineNuxtConfig({
     }
   },
 
+  runtimeConfig: {
+    public: {
+      urlBase: '' // NUXT_PUBLIC_URL_BASE em produção (ex.: https://linkafiliado.app)
+    }
+  },
+
   // Fonte Plus Jakarta Sans (variável, só baixa os pesos/caracteres usados)
   css: ['@fontsource-variable/plus-jakarta-sans'],
 
