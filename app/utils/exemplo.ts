@@ -53,10 +53,4 @@ const GRUPOS: Record<string, GrupoPublico> = {
   }
 }
 
-export const PAINEL_EXEMPLO = {
-  hoje: { ofertas: 12, enviadas: 34, naFila: 3, rejeitadas: 1, cliquesEntrada: 87 },
-  linkFormulario: 'https://linkafiliado.app/f/a8Kx92mPq7Zt',
-  linkEntrada: 'https://linkafiliado.app/g/casa-cozinha'
-}
-
 export const buscarGrupoExemplo = (slug: string) => GRUPOS[slug] ?? null

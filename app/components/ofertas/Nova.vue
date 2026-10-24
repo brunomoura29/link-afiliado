@@ -4,7 +4,8 @@ const emit = defineEmits<{ fechar: [] }>()
 
 const toast = useToast()
 const { categorias } = useGrupos()
-const { ofertas, adicionar } = useOfertas()
+const { adicionar } = useOfertas()
+const salvando = ref(false)
 
 const categoria = ref('')
 const link = ref('')
@@ -25,14 +26,23 @@ async function colar() {
   }
 }
 
-function salvar() {
+async function salvar() {
   if (!categoria.value) erroCategoria.value = 'Escolha para quais grupos a oferta vai'
   if (!plataforma.value) erroLink.value = link.value ? 'Esse não parece um link válido' : 'Cole o link de afiliado'
-  else if (ofertas.value.some(o => o.link === normalizarLink(link.value))) erroLink.value = 'Esse link já foi cadastrado'
   if (erroCategoria.value || erroLink.value || !plataforma.value) return
 
-  adicionar(categoria.value, normalizarLink(link.value), plataforma.value)
-  toast.sucesso('Oferta recebida', 'Estamos lendo o produto e escrevendo a legenda.')
+  salvando.value = true
+  const resultado = await adicionar(categoria.value, normalizarLink(link.value), plataforma.value)
+  salvando.value = false
+  if (resultado === 'duplicada') {
+    erroLink.value = 'Esse link já foi cadastrado'
+    return
+  }
+  if (resultado === 'erro') {
+    toast.erro('Não foi possível salvar', 'Verifique sua internet e tente de novo.')
+    return
+  }
+  toast.sucesso('Oferta recebida', 'Ela fica pendente até lermos o produto.')
   emit('fechar')
 }
 </script>
@@ -57,7 +67,10 @@ function salvar() {
     </div>
     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <UiBotao variante="secundario" @click="emit('fechar')">Cancelar</UiBotao>
-      <UiBotao type="submit"><UiIcone nome="enviar" :tamanho="16" /> Salvar oferta</UiBotao>
+      <UiBotao type="submit" :carregando="salvando">
+        <UiIcone nome="enviar" :tamanho="16" /> Salvar oferta
+        <template #carregando>Salvando…</template>
+      </UiBotao>
     </div>
   </form>
 </template>

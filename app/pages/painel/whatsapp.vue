@@ -7,6 +7,11 @@ useHead({ title: 'WhatsApp · LinkAfiliado' })
 const toast = useToast()
 const { disparar } = useConfete()
 const { estado, gerar, renovar, simularLeitura, cancelar, desconectar } = useWhatsapp()
+const { grupos } = useGrupos()
+const { ofertas, carregar: carregarOfertas } = useOfertas()
+await useAsyncData('ofertas', carregarOfertas)
+const enviadasHoje = computed(() => ofertas.value.flatMap(o => o.envios)
+  .filter(e => e.status === 'enviado' && e.quando && new Date(e.quando).toDateString() === new Date().toDateString()).length)
 
 // Celular: código pelo número (o QR estaria na tela do próprio celular que precisa lê-lo).
 // Computador: QR code.
@@ -137,11 +142,11 @@ const MODOS = [
 
             <div class="grid grid-cols-3 divide-x divide-line rounded border border-line bg-surface py-3 text-center">
               <div class="px-2">
-                <p class="text-title"><UiContador :valor="12" /></p>
+                <p class="text-title"><UiContador :valor="grupos.length" /></p>
                 <p class="text-[12px] text-muted">grupos</p>
               </div>
               <div class="px-2">
-                <p class="text-title"><UiContador :valor="PAINEL_EXEMPLO.hoje.enviadas" /></p>
+                <p class="text-title"><UiContador :valor="enviadasHoje" /></p>
                 <p class="text-[12px] text-muted">enviadas hoje</p>
               </div>
               <div class="px-2">

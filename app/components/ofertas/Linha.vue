@@ -20,7 +20,8 @@ const progresso = computed(() => {
       class="relative flex size-14 shrink-0 items-center justify-center rounded"
       :style="{ background: `linear-gradient(135deg, hsl(${oferta.matiz} 70% 92%), hsl(${oferta.matiz + 40} 70% 82%))` }"
     >
-      <UiSpinner v-if="!oferta.titulo && oferta.status === 'pendente'" class="text-black/40" />
+      <img v-if="oferta.imagem" :src="oferta.imagem" alt="" loading="lazy" class="size-full rounded object-cover">
+      <UiSpinner v-else-if="!oferta.titulo && oferta.status === 'pendente'" class="text-black/40" />
       <UiIcone v-else nome="sacola" :tamanho="22" :traco="1.5" class="text-black/30" />
       <span
         class="absolute -bottom-1 -right-1 size-3.5 rounded-full border-2 border-elevated"

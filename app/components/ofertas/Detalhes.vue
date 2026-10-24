@@ -38,21 +38,33 @@ async function copiarLegenda() {
 }
 
 const processando = ref<'enviar' | 'tentar' | 'excluir' | null>(null)
+const falhou = () => toast.erro('Não foi possível concluir', 'Verifique sua internet e tente de novo.')
 async function enviar() {
   processando.value = 'enviar'
-  await enviarAgora(props.oferta)
+  const enviou = await enviarAgora(props.oferta)
   processando.value = null
+  if (!enviou) return
   toast.whatsapp('Oferta enviada', `Publicada em ${props.oferta.envios.length} grupos.`)
 }
 async function tentar() {
   processando.value = 'tentar'
-  await tentarNovamente(props.oferta)
+  try {
+    await tentarNovamente(props.oferta)
+    toast.info('Na fila de novo', 'Vamos tentar ler o produto outra vez.')
+  } catch {
+    falhou()
+  }
   processando.value = null
 }
 const confirmandoExclusao = ref(false)
 async function confirmarExclusao() {
   processando.value = 'excluir'
-  await excluir(props.oferta)
+  try {
+    await excluir(props.oferta)
+  } catch {
+    processando.value = null
+    return falhou()
+  }
   processando.value = null
   toast.info('Oferta excluída')
   emit('fechar')
@@ -73,7 +85,8 @@ const ICONE_ENVIO = {
         class="relative flex size-16 shrink-0 items-center justify-center rounded"
         :style="{ background: `linear-gradient(135deg, hsl(${oferta.matiz} 70% 92%), hsl(${oferta.matiz + 40} 70% 82%))` }"
       >
-        <UiSpinner v-if="oferta.status === 'pendente'" class="text-black/40" />
+        <img v-if="oferta.imagem" :src="oferta.imagem" alt="" class="size-full rounded object-cover">
+        <UiSpinner v-else-if="oferta.status === 'pendente'" class="text-black/40" />
         <UiIcone v-else nome="sacola" :tamanho="26" :traco="1.5" class="text-black/30" />
       </span>
       <div class="min-w-0 flex-1">
@@ -131,7 +144,8 @@ const ICONE_ENVIO = {
             class="mb-1.5 flex h-28 items-center justify-center rounded"
             :style="{ background: `linear-gradient(135deg, hsl(${oferta.matiz} 70% 92%), hsl(${oferta.matiz + 40} 70% 82%))` }"
           >
-            <UiIcone nome="sacola" :tamanho="36" :traco="1.5" class="text-black/25" />
+            <img v-if="oferta.imagem" :src="oferta.imagem" alt="" class="size-full rounded object-cover">
+            <UiIcone v-else nome="sacola" :tamanho="36" :traco="1.5" class="text-black/25" />
           </div>
           <p class="whitespace-pre-line break-words px-1.5 pb-1">
             <template v-if="gerando"><span class="inline-flex gap-1 py-1"><span v-for="i in 3" :key="i" class="size-1.5 animate-bounce3 rounded-full bg-current opacity-50" :style="{ animationDelay: `${i * 150}ms` }" /></span></template>

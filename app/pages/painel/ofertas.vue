@@ -4,7 +4,17 @@ import type { Oferta } from '~/composables/useOfertas'
 definePageMeta({ layout: 'painel', pageTransition: { name: 'pagina', mode: 'out-in' } })
 useHead({ title: 'Ofertas · LinkAfiliado' })
 
-const { ofertas } = useOfertas()
+const { ofertas, carregar } = useOfertas()
+await useAsyncData('ofertas', carregar)
+
+// Enquanto houver oferta andando (lendo produto ou na fila), atualiza a cada 15s
+let atualizacao: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  atualizacao = setInterval(() => {
+    if (ofertas.value.some(o => o.status === 'pendente' || o.status === 'aprovada')) carregar().catch(() => {})
+  }, 15_000)
+})
+onBeforeUnmount(() => clearInterval(atualizacao))
 const { categorias } = useGrupos()
 const categoriaDe = (o: Oferta) => categorias.value.find(c => c.id === o.categoriaId)
 

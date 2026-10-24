@@ -5,11 +5,11 @@ useHead({ title: 'Início · LinkAfiliado' })
 const toast = useToast()
 const { primeiroNome } = usePerfil()
 const { estado: whatsapp, conectado: whatsappConectado } = useWhatsapp()
-const painel = PAINEL_EXEMPLO
-const { ofertas } = useOfertas()
+const { ofertas, carregar: carregarOfertas } = useOfertas()
+await useAsyncData('ofertas', carregarOfertas)
 const { categorias } = useGrupos()
 const ultimas = computed(() => [...ofertas.value].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).slice(0, 4))
-const nomeCategoria = (id: string) => categorias.value.find(c => c.id === id)?.nome ?? 'Sem categoria'
+const nomeCategoria = (id: string | null) => categorias.value.find(c => c.id === id)?.nome ?? 'Sem categoria'
 
 // Saudação pelo horário do aparelho (só no cliente, para não divergir do servidor)
 const saudacao = ref('Olá')
@@ -18,12 +18,13 @@ onMounted(() => {
   saudacao.value = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'
 })
 
-const NUMEROS = [
-  { rotulo: 'Ofertas hoje', valor: painel.hoje.ofertas, icone: 'sacola' },
-  { rotulo: 'Enviadas hoje', valor: painel.hoje.enviadas, icone: 'enviar' },
-  { rotulo: 'Na fila', valor: painel.hoje.naFila, icone: 'relogio' },
-  { rotulo: 'Cliques nos grupos', valor: painel.hoje.cliquesEntrada, icone: 'usuarios' }
-] as const
+const hoje = (iso: string | null) => !!iso && new Date(iso).toDateString() === new Date().toDateString()
+const NUMEROS = computed(() => [
+  { rotulo: 'Ofertas hoje', valor: ofertas.value.filter(o => hoje(o.criadaEm)).length, icone: 'sacola' },
+  { rotulo: 'Enviadas hoje', valor: ofertas.value.flatMap(o => o.envios).filter(e => e.status === 'enviado' && hoje(e.quando)).length, icone: 'enviar' },
+  { rotulo: 'Na fila', valor: ofertas.value.filter(o => o.status === 'pendente' || o.status === 'aprovada').length, icone: 'relogio' },
+  { rotulo: 'Rejeitadas', valor: ofertas.value.filter(o => o.status === 'rejeitada').length, icone: 'alerta' }
+] as const)
 
 const copiado = ref('')
 async function copiar(texto: string, chave: string) {
