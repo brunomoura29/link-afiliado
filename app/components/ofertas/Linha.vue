@@ -5,8 +5,8 @@ import type { CategoriaGrupo } from '~/composables/useGrupos'
 const props = defineProps<{ oferta: Oferta, categoria?: CategoriaGrupo }>()
 defineEmits<{ abrir: [] }>()
 
-const desconto = computed(() => props.oferta.preco != null && props.oferta.original
-  ? Math.round((1 - props.oferta.preco / props.oferta.original) * 100) : null)
+const desconto = computed(() => Number(props.oferta.descontoRotulo?.match(/\d+/)?.[0])
+  || (props.oferta.preco != null && props.oferta.original ? Math.round((1 - props.oferta.preco / props.oferta.original) * 100) : null))
 const progresso = computed(() => {
   const e = props.oferta.envios
   return e.length ? `${e.filter(x => x.status === 'enviado').length}/${e.length} grupos` : ''
@@ -43,7 +43,11 @@ const progresso = computed(() => {
         <span v-if="oferta.original" class="text-label text-muted line-through">{{ formatarPreco(oferta.original) }}</span>
         <span v-if="desconto" class="text-label font-semibold text-status-aprovada">-{{ desconto }}%</span>
       </span>
-      <span v-else class="mt-1.5 block h-3.5 w-32 skeleton" />
+      <span v-else-if="oferta.status === 'pendente'" class="mt-1.5 block h-3.5 w-32 skeleton" />
+      <span v-else class="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-label">
+        <span class="text-muted">Preço no link</span>
+        <span v-if="desconto" class="font-semibold text-status-aprovada">-{{ desconto }}%</span>
+      </span>
 
       <span class="mt-1 block truncate text-[12px] text-muted">
         {{ categoria?.emoji }} {{ categoria?.nome ?? 'Sem categoria' }} · {{ oferta.origem }} · {{ tempoRelativo(oferta.criadaEm) }}

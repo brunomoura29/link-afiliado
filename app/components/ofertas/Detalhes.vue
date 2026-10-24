@@ -8,8 +8,8 @@ const emit = defineEmits<{ fechar: [] }>()
 const toast = useToast()
 const { novaLegenda, tentarNovamente, enviarAgora, excluir } = useOfertas()
 
-const desconto = computed(() => props.oferta.preco != null && props.oferta.original
-  ? Math.round((1 - props.oferta.preco / props.oferta.original) * 100) : null)
+const desconto = computed(() => Number(props.oferta.descontoRotulo?.match(/\d+/)?.[0])
+  || (props.oferta.preco != null && props.oferta.original ? Math.round((1 - props.oferta.preco / props.oferta.original) * 100) : null))
 
 // Legenda: gerar outra com efeito de digitação
 const gerando = ref(false)
@@ -124,6 +124,15 @@ const ICONE_ENVIO = {
         <template #carregando>Pedindo…</template>
       </UiBotao>
     </div>
+
+    <!-- Loja que esconde o preço (ex.: Shopee) -->
+    <p v-if="oferta.status !== 'pendente' && oferta.status !== 'rejeitada' && oferta.preco == null" class="flex items-start gap-2 rounded bg-surface p-3 text-label">
+      <UiIcone nome="info" :tamanho="16" class="mt-0.5 shrink-0 text-muted" />
+      <span>
+        A {{ nomePlataforma(oferta.plataforma) }} não mostra o preço sem login, então a legenda {{ desconto ? `destaca os ${desconto}% OFF e` : '' }}
+        convida a conferir o preço no link.
+      </span>
+    </p>
 
     <!-- Rejeitada -->
     <div v-if="oferta.status === 'rejeitada'" class="flex flex-col gap-3 rounded border border-status-rejeitada/40 bg-status-rejeitada/5 p-4">

@@ -18,6 +18,7 @@ export interface Oferta {
   original: number | null
   imagem: string | null
   condicao: string | null // ex.: "no Pix": o preço só vale nessa condição
+  descontoRotulo: string | null // texto da loja, ex.: "42% OFF"
   categoriaId: string | null
   status: StatusPostagem
   motivo?: string
@@ -42,6 +43,7 @@ const daLinha = (o: LinhaOferta): Oferta => ({
   original: o.preco_original == null ? null : Number(o.preco_original),
   imagem: o.imagem_url,
   condicao: o.condicao_preco,
+  descontoRotulo: o.desconto_rotulo,
   categoriaId: o.categoria_id,
   status: o.status as StatusPostagem,
   motivo: o.motivo ?? undefined,

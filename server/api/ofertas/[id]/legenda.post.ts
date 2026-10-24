@@ -3,7 +3,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 // Painel: botão "Outra" — escreve outra legenda com os mesmos dados lidos do produto.
 export default defineEventHandler(async (event) => {
   const oferta = await exigirDonoDaOferta(event)
-  if (!oferta.titulo || oferta.preco == null) {
+  if (!oferta.titulo) {
     throw createError({ statusCode: 409, statusMessage: 'produto_nao_lido' })
   }
 
@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const { texto, ia } = await gerarLegenda(
     {
       titulo: oferta.titulo,
-      preco: Number(oferta.preco),
+      preco: oferta.preco == null ? null : Number(oferta.preco),
       precoOriginal: oferta.preco_original == null ? null : Number(oferta.preco_original),
       condicaoPreco: oferta.condicao_preco,
       descontoRotulo: oferta.desconto_rotulo,

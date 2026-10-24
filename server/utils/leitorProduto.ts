@@ -4,7 +4,7 @@
 
 export interface ProdutoLido {
   titulo: string
-  preco: number
+  preco: number | null // null só quando a loja esconde o preço de propósito (ex.: Shopee)
   precoOriginal: number | null
   imagem: string | null
   itemId: string | null
@@ -42,7 +42,14 @@ async function baixar(link: string) {
     if (r.status === 404 || r.status === 410) throw new FalhaLeitura('O produto não foi encontrado: o link pode ter expirado.')
     if (!r.ok) throw new FalhaLeitura(`A loja respondeu com erro (${r.status}). Tente de novo mais tarde.`)
     if (!(r.headers.get('content-type') ?? '').includes('html')) throw new FalhaLeitura('O link não abre uma página de produto.')
-    return { html: await r.text(), url }
+    const html = await r.text()
+    // Link curto da Shopee redireciona por JavaScript: var CONFIG={httpUrl:"https:\/\/shopee.com.br\/..."}
+    const viaScript = html.match(/CONFIG\s*=\s*\{\s*httpUrl\s*:\s*"([^"]+)"/)?.[1]
+    if (viaScript) {
+      url = new URL(JSON.parse(`"${viaScript}"`), url).href
+      continue
+    }
+    return { html, url }
   }
   throw new FalhaLeitura('O link redireciona demais e não chega numa página de produto.')
 }
@@ -146,19 +153,53 @@ function lerMercadoLivre(html: string): Partial<ProdutoLido> | null {
   }
 }
 
+// ── Shopee ──
+// A página pública traz nome, foto e % de desconto, mas os preços vêm vazios para quem
+// não está logado (proteção da própria Shopee). Sem API, publicamos com o desconto e
+// "confira o preço no link". TODO: preço pela Shopee Affiliate Open API quando liberada.
+
+const idsShopee = (url: string) =>
+  url.match(/shopee\.com\.br\/(?:product|opaanlp)\/(\d+)\/(\d+)/) ?? url.match(/-i\.(\d+)\.(\d+)/)
+
+async function lerShopee(url: string, html: string): Promise<Partial<ProdutoLido> & { precoOculto: boolean }> {
+  const ids = idsShopee(url)
+  // A página "opaanlp" (destino do link de afiliado) não tem os dados; a /product/ tem
+  if (ids && !/\/product\//.test(url)) {
+    html = (await baixar(`https://shopee.com.br/product/${ids[1]}/${ids[2]}`)).html
+  }
+  const desconto = Number(html.match(/"show_discount":(\d{1,2})/)?.[1]) || null
+  // Se um dia o preço vier na página, aproveita (a Shopee usa preço x 100000)
+  const bruto = Number(html.match(/"price_min":(\d+)/)?.[1] ?? html.match(/"price":(\d{6,})/)?.[1])
+  const antes = Number(html.match(/"price_min_before_discount":(\d+)/)?.[1] ?? html.match(/"price_before_discount":(\d{6,})/)?.[1])
+  return {
+    titulo: meta(html, 'og:title')?.replace(/\s*\|\s*Shopee Brasil\s*$/i, '') ?? null,
+    preco: bruto ? bruto / 100000 : null,
+    precoOriginal: antes ? antes / 100000 : null,
+    imagem: meta(html, 'og:image'),
+    itemId: ids ? `${ids[1]}.${ids[2]}` : null,
+    descontoRotulo: desconto ? `${desconto}% OFF` : null,
+    precoOculto: true
+  }
+}
+
 // ── Entrada ──
 
 export async function lerProduto(link: string): Promise<ProdutoLido> {
   const { html, url } = await baixar(link)
   const plataforma = detectarPlataforma(url)
 
-  const lido = (plataforma === 'mercado_livre' ? lerMercadoLivre(html) : null) ?? lerGenerico(html)
+  const lido: Partial<ProdutoLido> & { precoOculto?: boolean } =
+    plataforma === 'shopee' ? await lerShopee(url, html)
+      : (plataforma === 'mercado_livre' ? lerMercadoLivre(html) : null) ?? lerGenerico(html)
 
   if (!lido.titulo) throw new FalhaLeitura('Não encontramos o nome do produto na página.')
-  if (!lido.preco) throw new FalhaLeitura('Não encontramos o preço na página do produto. Confira se o link abre o produto certo.')
+  // Sem preço só é aceito em loja que esconde o preço de propósito; nas outras é sinal de página errada
+  if (!lido.preco && !lido.precoOculto) {
+    throw new FalhaLeitura('Não encontramos o preço na página do produto. Confira se o link abre o produto certo.')
+  }
 
-  const preco = Math.round(lido.preco * 100) / 100
-  const original = lido.precoOriginal && lido.precoOriginal > preco ? Math.round(lido.precoOriginal * 100) / 100 : null
+  const preco = lido.preco ? Math.round(lido.preco * 100) / 100 : null
+  const original = preco && lido.precoOriginal && lido.precoOriginal > preco ? Math.round(lido.precoOriginal * 100) / 100 : null
   return {
     titulo: lido.titulo.slice(0, 300),
     preco,

@@ -229,6 +229,16 @@ próxima (ver checklist de aceite no fim).
   destaque** (título = `og:title`, preço em `current_price`, "de" em
   `previous_price`, rótulo em `discount_label`). Página normal do produto:
   JSON-LD + `andes-money-amount--previous`.
+- **Shopee:** o link curto (`s.shopee.com.br`) responde 200 e redireciona por
+  JavaScript (`var CONFIG={httpUrl:"…"}`) → seguir esse destino. Ele chega em
+  `/opaanlp/<loja>/<item>`, que não tem dados; ler `/product/<loja>/<item>`.
+  Ali há nome (`og:title`), foto (`og:image`) e `show_discount` (%), mas **os
+  preços vêm `null` sem login** (proteção da Shopee; as rotas `/api/v4/*`
+  dão 403 — não usar). Decisão: publicar **sem preço**, com o desconto e
+  "confira o preço no link" (`preco = null` só é aceito em loja que esconde o
+  preço de propósito). Futuro: **Shopee Affiliate Open API** (acesso já
+  solicitado pelo usuário) para preencher o preço — exceção aprovada à regra
+  "nenhuma API de afiliados", por credencial de cada cliente.
 - **Condição do preço:** quando a loja diz "no Pix", o preço só vale no Pix →
   `ofertas.condicao_preco = 'no Pix'` e a legenda tem que dizer. O % de
   desconto usado é o **da loja** (`desconto_rotulo`), não a conta.
