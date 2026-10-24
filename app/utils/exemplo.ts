@@ -1,0 +1,102 @@
+// Dados de exemplo enquanto o backend não existe. Substituir por chamadas ao Supabase.
+import type { Plataforma, StatusPostagem } from './plataforma'
+
+export interface CategoriaPublica {
+  id: string
+  nome: string
+  emoji: string
+}
+
+export interface FormularioPublico {
+  dono: string
+  nomeLink: string
+  categorias: CategoriaPublica[]
+}
+
+export interface OfertaPublica {
+  titulo: string
+  plataforma: Plataforma
+  preco: number
+  original: number
+  matiz: number
+}
+
+export interface GrupoPublico {
+  slug: string
+  nome: string
+  emoji: string
+  descricao: string
+  dono: string
+  membros: number
+  ofertasPorDia: number
+  convite: string | null // null = todos os grupos lotados
+  ofertas: OfertaPublica[]
+}
+
+const CATEGORIAS: CategoriaPublica[] = [
+  { id: 'casa', nome: 'Casa e Cozinha', emoji: '🏠' },
+  { id: 'eletronicos', nome: 'Eletrônicos', emoji: '🎧' },
+  { id: 'moda', nome: 'Moda', emoji: '👗' },
+  { id: 'beleza', nome: 'Beleza', emoji: '💄' },
+  { id: 'infantil', nome: 'Infantil', emoji: '🧸' },
+  { id: 'pet', nome: 'Pet', emoji: '🐶' }
+]
+
+const FORMULARIOS: Record<string, FormularioPublico> = {
+  demo: { dono: 'Loja da Ana', nomeLink: 'Assistente João', categorias: CATEGORIAS },
+  a8Kx92mPq7Zt: { dono: 'Loja da Ana', nomeLink: 'Assistente João', categorias: CATEGORIAS }
+}
+
+const OFERTAS_CASA: OfertaPublica[] = [
+  { titulo: 'Air fryer 4L digital, 1500W, cesto antiaderente', plataforma: 'mercado_livre', preco: 299, original: 449, matiz: 48 },
+  { titulo: 'Kit 6 potes herméticos de vidro com tampa bambu', plataforma: 'shopee', preco: 54.9, original: 89.9, matiz: 20 },
+  { titulo: 'Jogo de panelas antiaderente 5 peças', plataforma: 'tiktok', preco: 189.9, original: 329.9, matiz: 190 },
+  { titulo: 'Organizador de geladeira acrílico, kit 4', plataforma: 'amazon', preco: 42.5, original: 79.9, matiz: 150 }
+]
+
+const GRUPOS: Record<string, GrupoPublico> = {
+  'casa-cozinha': {
+    slug: 'casa-cozinha',
+    nome: 'Achadinhos Casa e Cozinha',
+    emoji: '🏠',
+    descricao: 'Os melhores descontos da Shopee, Mercado Livre, Amazon e outras lojas para sua casa, todos os dias.',
+    dono: 'Loja da Ana',
+    membros: 1847,
+    ofertasPorDia: 8,
+    convite: 'https://chat.whatsapp.com/EXEMPLO',
+    ofertas: OFERTAS_CASA
+  },
+  'lotado': {
+    slug: 'lotado',
+    nome: 'Achadinhos Eletrônicos',
+    emoji: '🎧',
+    descricao: 'Fones, carregadores, gadgets e tudo de tecnologia em promoção.',
+    dono: 'Loja da Ana',
+    membros: 3072,
+    ofertasPorDia: 6,
+    convite: null,
+    ofertas: OFERTAS_CASA.slice(0, 2)
+  }
+}
+
+export const USUARIO_EXEMPLO = {
+  nome: 'Ana Souza',
+  loja: 'Loja da Ana',
+  email: 'ana@exemplo.com',
+  whatsapp: { conectado: true, numero: '+55 11 9•••• 4821' }
+}
+
+export const PAINEL_EXEMPLO = {
+  hoje: { ofertas: 12, enviadas: 34, naFila: 3, rejeitadas: 1, cliquesEntrada: 87 },
+  linkFormulario: 'https://linkafiliado.app/f/a8Kx92mPq7Zt',
+  linkEntrada: 'https://linkafiliado.app/g/casa-cozinha',
+  ultimas: [
+    { id: 1, titulo: 'Fone Bluetooth com cancelamento de ruído, bateria 40h', plataforma: 'mercado_livre', preco: 129.9, categoria: 'Eletrônicos', status: 'enviada', quando: 'há 4 min' },
+    { id: 2, titulo: 'Kit 6 potes herméticos de vidro com tampa bambu', plataforma: 'shopee', preco: 54.9, categoria: 'Casa e Cozinha', status: 'aprovada', quando: 'há 9 min' },
+    { id: 3, titulo: 'Air fryer 4L digital, 1500W, cesto antiaderente', plataforma: 'mercado_livre', preco: 299, categoria: 'Casa e Cozinha', status: 'pendente', quando: 'há 12 min' },
+    { id: 4, titulo: 'Sérum facial vitamina C 30ml', plataforma: 'amazon', preco: 39.9, categoria: 'Beleza', status: 'rejeitada', quando: 'há 31 min' }
+  ] as { id: number, titulo: string, plataforma: Plataforma, preco: number, categoria: string, status: StatusPostagem, quando: string }[]
+}
+
+export const buscarFormularioExemplo = (token: string) => FORMULARIOS[token] ?? null
+export const buscarGrupoExemplo = (slug: string) => GRUPOS[slug] ?? null

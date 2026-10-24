@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens do design (ver .claude/skills/design-automacao-afiliados). Valores em canais RGB. */
+@layer base {
+  :root {
+    --fg: 13 13 13;            /* #0d0d0d */
+    --muted: 92 92 92;         /* #5c5c5c */
+    --line: 227 227 227;       /* #e3e3e3 */
+    --bg: 255 255 255;         /* #ffffff */
+    --surface: 247 247 247;    /* #f7f7f7 */
+    --elevated: 255 255 255;
+
+    --shopee: 238 77 45;       /* #ee4d2d */
+    --shopee-tint: 253 234 230;/* #fdeae6 */
+    --ml-yellow: 255 241 89;   /* #fff159 */
+    --ml-blue: 52 131 250;     /* #3483fa */
+    --ml-tint: 255 251 224;    /* #fffbe0 */
+    --whatsapp: 37 211 102;    /* #25d366 */
+
+    --status-pendente: 163 163 163;
+    --status-aprovada: 26 127 55;
+    --status-rejeitada: 200 30 58;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / .04), 0 4px 16px -4px rgb(0 0 0 / .08);
+    --shadow-pop: 0 12px 40px -8px rgb(0 0 0 / .18), 0 2px 6px rgb(0 0 0 / .06);
+    color-scheme: light;
+  }
+
+  .dark {
+    --fg: 242 242 242;
+    --muted: 163 163 163;
+    --line: 51 51 51;
+    --bg: 18 18 18;
+    --surface: 27 27 27;
+    --elevated: 33 33 33;
+
+    /* Tints adaptados ao escuro (os claros da skill ofuscariam no fundo #121212) */
+    --shopee-tint: 58 28 22;
+    --ml-blue: 92 160 255;
+    --ml-tint: 46 42 12;
+
+    --status-aprovada: 74 196 106;
+    --status-rejeitada: 255 96 118;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / .4), 0 4px 16px -4px rgb(0 0 0 / .5);
+    --shadow-pop: 0 12px 40px -8px rgb(0 0 0 / .7), 0 0 0 1px rgb(255 255 255 / .04);
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-bg font-sans text-body text-fg antialiased;
+    transition: background-color .3s ease, color .3s ease;
+  }
+
+  ::selection {
+    background: rgb(var(--ml-blue) / .25);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--ml-blue));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Revelar ao rolar (diretiva v-reveal) */
+  .reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity .6s cubic-bezier(.22,1,.36,1), transform .6s cubic-bezier(.22,1,.36,1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg,
+      rgb(var(--line) / .6) 0%, rgb(var(--line)) 50%, rgb(var(--line) / .6) 100%);
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded;
+  }
+}
+
+/* Transições de página (definePageMeta.pageTransition) */
+.auth-enter-active { transition: opacity .3s ease, transform .4s cubic-bezier(.22, 1, .36, 1); }
+.auth-leave-active { transition: opacity .15s ease, transform .15s ease; }
+.auth-enter-from { opacity: 0; transform: translateX(16px); }
+.auth-leave-to { opacity: 0; transform: translateX(-16px); }
+
+.pagina-enter-active { transition: opacity .25s ease, transform .35s cubic-bezier(.22, 1, .36, 1); }
+.pagina-leave-active { transition: opacity .12s ease; }
+.pagina-enter-from { opacity: 0; transform: translateY(8px); }
+.pagina-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+}

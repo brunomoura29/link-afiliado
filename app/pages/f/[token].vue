@@ -1,0 +1,211 @@
+<script setup lang="ts">
+import type { Plataforma, StatusPostagem } from '~/utils/plataforma'
+
+// Formulário público que o assistente usa (sem login). Tokens de exemplo: "demo".
+const rota = useRoute()
+const token = String(rota.params.token)
+const toast = useToast()
+const { disparar } = useConfete()
+
+const { data: form } = await useAsyncData(`form-${token}`, async () => buscarFormularioExemplo(token))
+if (import.meta.server && !form.value) setResponseStatus(useRequestEvent()!, 404)
+
+useHead({ title: () => (form.value ? `Enviar oferta · ${form.value.dono}` : 'Link inválido') })
+useSeoMeta({ robots: 'noindex, nofollow' })
+
+// Estado
+const categoria = ref('')
+const link = ref('')
+const erroLink = ref('')
+const erroCategoria = ref('')
+const salvando = ref(false)
+const salvo = ref(false)
+const botao = ref<{ $el: HTMLElement }>()
+const enviadas = ref<{ id: number, link: string, plataforma: Plataforma, categoria: string, status: StatusPostagem }[]>([])
+
+const plataforma = computed(() => detectarPlataforma(link.value))
+const nomeCategoria = computed(() => form.value?.categorias.find(c => c.id === categoria.value)?.nome ?? '')
+const opcoesCategoria = computed(() =>
+  (form.value?.categorias ?? []).map(c => ({ valor: c.id, rotulo: `${c.emoji}  ${c.nome}` }))
+)
+watch(link, () => (erroLink.value = ''))
+watch(categoria, (c) => {
+  erroCategoria.value = ''
+  try { localStorage.setItem(`categoria:${token}`, c) } catch {}
+})
+
+// Lembra a última categoria usada neste link
+onMounted(() => {
+  try {
+    const salva = localStorage.getItem(`categoria:${token}`)
+    if (salva && form.value?.categorias.some(c => c.id === salva)) categoria.value = salva
+  } catch {}
+})
+
+async function colar() {
+  try {
+    const texto = await navigator.clipboard.readText()
+    if (!texto) throw new Error('vazio')
+    link.value = texto.trim()
+  } catch {
+    toast.info('Não deu para colar automaticamente', 'Toque e segure no campo e escolha "Colar".')
+  }
+}
+
+async function salvar() {
+  if (salvando.value || salvo.value) return
+  if (!categoria.value) {
+    erroCategoria.value = 'Escolha para quais grupos a oferta vai'
+    return
+  }
+  if (!plataforma.value) {
+    erroLink.value = link.value ? 'Esse não parece um link válido (precisa começar com https://)' : 'Cole o link de afiliado'
+    return
+  }
+  if (enviadas.value.some(e => e.link === normalizarLink(link.value))) {
+    erroLink.value = 'Você já enviou esse link agora há pouco'
+    return
+  }
+
+  salvando.value = true
+  await new Promise(r => setTimeout(r, 1100)) // TODO: chamar a função do servidor que valida o token
+  salvando.value = false
+  salvo.value = true
+  disparar(botao.value?.$el ?? null)
+  navigator.vibrate?.(30)
+
+  const item = { id: Date.now(), link: normalizarLink(link.value), plataforma: plataforma.value, categoria: nomeCategoria.value, status: 'pendente' as StatusPostagem }
+  enviadas.value.unshift(item)
+  // Simulação: o backend vai atualizar o status de verdade
+  setTimeout(() => {
+    const e = enviadas.value.find(x => x.id === item.id)
+    if (e) e.status = 'aprovada'
+  }, 2500)
+
+  setTimeout(() => {
+    salvo.value = false
+    link.value = ''
+  }, 1600)
+}
+</script>
+
+<template>
+  <!-- Link inválido -->
+  <div v-if="!form" class="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
+    <span class="mb-5 flex size-16 animate-pop items-center justify-center rounded-full bg-status-rejeitada/10 text-status-rejeitada">
+      <UiIcone nome="link" :tamanho="28" />
+    </span>
+    <h1 class="animate-fade-up text-title [animation-delay:80ms]">Esse link não funciona mais</h1>
+    <p class="mt-2 max-w-xs animate-fade-up text-muted [animation-delay:160ms]">
+      Ele pode ter sido desativado. Peça um link novo para quem te enviou.
+    </p>
+  </div>
+
+  <div v-else class="mx-auto flex min-h-dvh max-w-md flex-col">
+    <!-- Cabeçalho -->
+    <header class="flex items-center gap-3 px-4 pb-2 pt-[max(20px,env(safe-area-inset-top))]">
+      <span class="flex size-11 shrink-0 animate-pop items-center justify-center rounded-full bg-fg text-[18px] font-semibold text-bg">
+        {{ form.dono.charAt(0) }}
+      </span>
+      <div class="min-w-0 animate-fade-up">
+        <p class="truncate font-semibold">{{ form.dono }}</p>
+        <p class="truncate text-label text-muted">Enviando como {{ form.nomeLink }}</p>
+      </div>
+    </header>
+
+    <form id="form-oferta" class="flex flex-1 flex-col gap-4 px-4 pb-40 pt-6" @submit.prevent="salvar">
+      <div class="mb-2 animate-fade-up [animation-delay:60ms]">
+        <h1 class="text-[26px] font-semibold leading-8 tracking-tight">Nova oferta</h1>
+        <p class="mt-1 text-muted">Escolha a categoria e cole o link de afiliado.</p>
+      </div>
+
+      <div class="animate-fade-up [animation-delay:120ms]">
+        <UiSelecao
+          v-model="categoria"
+          rotulo="Categoria"
+          placeholder="Selecione a categoria"
+          :opcoes="opcoesCategoria"
+          :erro="erroCategoria"
+        />
+      </div>
+
+      <div class="animate-fade-up [animation-delay:180ms]">
+        <UiCampo
+          v-model="link"
+          rotulo="Link de afiliado"
+          type="url"
+          inputmode="url"
+          :erro="erroLink"
+          dica="Gere o link no app ou painel de afiliado da loja."
+        >
+          <template #fim>
+            <Transition name="marcado" mode="out-in">
+              <span
+                v-if="plataforma"
+                :key="plataforma"
+                class="flex size-8 items-center justify-center rounded-full bg-fg text-bg"
+              >
+                <UiIcone nome="check" :tamanho="16" :traco="3" />
+              </span>
+              <button
+                v-else
+                type="button"
+                class="flex h-9 items-center gap-1.5 rounded bg-fg px-3 text-label font-semibold text-bg transition-transform active:scale-95"
+                @click="colar"
+              >
+                <UiIcone nome="copiar" :tamanho="14" /> Colar
+              </button>
+            </Transition>
+          </template>
+        </UiCampo>
+        <div class="mt-3 h-7">
+          <Transition name="marcado">
+            <UiBadgePlataforma v-if="plataforma" :plataforma="plataforma" />
+          </Transition>
+        </div>
+      </div>
+
+      <!-- Enviadas nesta sessão -->
+      <section v-if="enviadas.length" class="flex flex-col gap-2">
+        <p class="text-label font-semibold text-muted">Enviadas agora</p>
+        <TransitionGroup name="lista" tag="ul" class="flex flex-col gap-2">
+          <li v-for="e in enviadas" :key="e.id" class="flex items-center gap-3 rounded border border-line bg-surface p-3">
+            <span
+              class="size-2.5 shrink-0 rounded-full"
+              :style="{ background: corPlataforma(e.plataforma) }"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="block truncate font-mono text-label">{{ e.link.replace(/^https?:\/\//, '') }}</span>
+              <span class="block text-label text-muted">{{ e.categoria }}</span>
+            </span>
+            <Transition name="marcado" mode="out-in">
+              <UiStatus :key="e.status" :status="e.status" />
+            </Transition>
+          </li>
+        </TransitionGroup>
+      </section>
+    </form>
+
+    <!-- Botão fixo no alcance do polegar -->
+    <div class="fixed inset-x-0 bottom-0 z-30">
+      <div class="mx-auto max-w-md bg-gradient-to-t from-bg via-bg to-bg/0 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-8">
+        <UiBotao ref="botao" form="form-oferta" type="submit" tamanho="lg" bloco :carregando="salvando" :sucesso="salvo">
+          <UiIcone nome="enviar" :tamanho="18" /> Salvar oferta
+          <template #carregando>Enviando…</template>
+          <template #sucesso>Oferta na fila!</template>
+        </UiBotao>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.marcado-enter-active { transition: opacity .2s ease, transform .4s cubic-bezier(.34, 1.56, .64, 1); }
+.marcado-leave-active { transition: opacity .12s ease, transform .12s ease; }
+.marcado-enter-from { opacity: 0; transform: scale(.4); }
+.marcado-leave-to { opacity: 0; transform: scale(.8); }
+
+.lista-enter-active { transition: opacity .3s ease, transform .45s cubic-bezier(.34, 1.56, .64, 1); }
+.lista-enter-from { opacity: 0; transform: translateY(-12px) scale(.96); }
+.lista-move { transition: transform .4s cubic-bezier(.22, 1, .36, 1); }
+</style>
