@@ -1,6 +1,8 @@
 // (11) 98765-4321 enquanto digita
 export function formatarTelefone(valor: string) {
-  const d = valor.replace(/\D/g, '').slice(0, 11)
+  let d = valor.replace(/\D/g, '')
+  if (d.length > 11 && d.startsWith('55')) d = d.slice(2) // colado com +55
+  d = d.slice(0, 11)
   if (!d) return ''
   if (d.length <= 2) return `(${d}`
   if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
@@ -30,6 +32,12 @@ export const gerarSlug = (t: string) =>
   semAcento(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 
 // "Casa e Cozinha" → "QUERO CASA" (palavra-chave para pedir o convite)
+// Endereço do link enquanto digita: só minúsculas, números e hífen
+export const limparSlug = (t: string) => semAcento(t).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-').replace(/^-/, '').slice(0, 40)
+
+// Login: se parece telefone, formata; se tem letra ou @, deixa como está (e-mail)
+export const formatarEmailOuTelefone = (v: string) => /^[\d()\s+-]+$/.test(v) ? formatarTelefone(v) : v
+
 export const gerarPalavraChave = (t: string) => {
   const primeira = semAcento(t).toUpperCase().match(/[A-Z0-9]{3,}/)?.[0]
   return primeira ? `QUERO ${primeira}` : ''

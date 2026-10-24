@@ -67,6 +67,16 @@ painel; a rota pública `/f/**` deve ficar em `redirectOptions.exclude`.
 
 ## Modelo de dados (Supabase)
 
+> **Fonte da verdade: `supabase/migrations/`** (aplicada no projeto
+> LinkAfiliados). Tipos em `app/types/database.types.ts` — gerar de novo
+> após cada migração. Diferenças em relação ao rascunho abaixo: `postagens`
+> foi fundida em `ofertas` (status/motivo/legenda ficam na oferta);
+> `categorias.slug` é **único no sistema todo** (é a URL pública `/g/<slug>`);
+> credenciais da UazAPI ficam em `whatsapp_credenciais` (RLS sem políticas,
+> só a chave secreta lê); perfil + configurações são criados por gatilho no
+> cadastro (nome/telefone via `options.data` do signUp). Cadastro **sem
+> confirmação de e-mail** (desligar "Confirm email" no Supabase Auth).
+
 > O schema abaixo é a base de pipeline. Na implementação, toda tabela ganha
 > `owner_id uuid not null references auth.users(id)` + RLS
 > (`owner_id = auth.uid()`), a deduplicação vira `unique (owner_id,
@@ -194,9 +204,10 @@ próxima (ver checklist de aceite no fim).
   `vm.tiktok.com` costumam abrir conteúdo de app/JS). Para essas, mesmo
   fallback de navegador headless descrito abaixo.
 - **Quando a leitura falha** (loja `outra` sem dados estruturados, bloqueio
-  etc.): decisão pendente com o usuário — rejeitar, ou o formulário pedir
-  título/preço manualmente ao assistente. Valores digitados por humano são
-  aceitáveis; a IA continua proibida de inventar preço/desconto.
+  etc.) — **decidido**: a oferta entra no painel como `rejeitada` com
+  `motivo` explicando, e o painel oferece **"Tentar de novo"**. O formulário
+  do assistente NÃO pede título/preço manual. A IA continua proibida de
+  inventar preço/desconto.
 - **Mercado Livre tem proteção anti-bot ativa** (confirmado na prática: um
   `fetch` simples pode ser bloqueado). Primeiro tentar com headers de
   navegador real (user-agent, accept-language etc.); se mesmo assim for

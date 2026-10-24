@@ -6,10 +6,22 @@ const props = defineProps<{
   type?: string
   inputmode?: 'text' | 'url' | 'numeric' | 'email' | 'tel'
   autocomplete?: string
+  maxlength?: number
+  // Formata enquanto digita/cola (ex.: telefone). Aplicado no próprio input para o que
+  // aparece na tela nunca divergir do valor (formatar num watch no pai deixava sobrar
+  // caractere quando o valor formatado não mudava).
+  formatar?: (valor: string) => string
 }>()
 
 const modelo = defineModel<string>({ default: '' })
 const id = useId()
+
+function aoDigitar(e: Event) {
+  const el = e.target as HTMLInputElement
+  const valor = props.formatar ? props.formatar(el.value) : el.value
+  if (el.value !== valor) el.value = valor
+  modelo.value = valor
+}
 
 // Balança o campo sempre que um novo erro aparece
 const tremendo = ref(false)
@@ -33,12 +45,14 @@ watch(() => props.erro, (novo) => {
     >
       <input
         :id="id"
-        v-model="modelo"
+        :value="modelo"
         :type="type ?? 'text'"
         :inputmode="inputmode"
         placeholder=" "
         :autocomplete="autocomplete ?? 'off'"
+        :maxlength="maxlength"
         :aria-invalid="!!erro || undefined"
+        @input="aoDigitar"
         :aria-describedby="erro || dica ? `${id}-msg` : undefined"
         class="peer h-14 w-full bg-transparent px-4 pb-1.5 pt-5 text-body text-fg outline-none"
         :class="$slots.fim && 'pr-12'"

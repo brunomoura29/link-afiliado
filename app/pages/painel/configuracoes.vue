@@ -17,10 +17,6 @@ function descartar() {
 // Intervalo: o máximo nunca fica abaixo do mínimo
 watch(() => r.intervaloMin, (min) => { if (r.intervaloMax < min) r.intervaloMax = min })
 watch(() => r.intervaloMax, (max) => { if (r.intervaloMin > max) r.intervaloMin = max })
-watch(() => r.telefone, (v) => {
-  const f = formatarTelefone(v)
-  if (f !== v) r.telefone = f
-})
 
 const resumo = computed(() => {
   const janela = r.pausaNoturna ? `entre ${r.inicio} e ${r.fim}` : 'a qualquer hora'
@@ -142,7 +138,7 @@ async function excluirConta() {
       <UiCard class="flex flex-col gap-4 p-5">
         <UiCampo v-model="r.nome" rotulo="Nome" autocomplete="name" />
         <UiCampo v-model="r.email" rotulo="E-mail" type="email" inputmode="email" autocomplete="email" :erro="erroEmail" />
-        <UiCampo v-model="r.telefone" rotulo="Celular com DDD" type="tel" inputmode="tel" autocomplete="tel-national" />
+        <UiCampo v-model="r.telefone" rotulo="Celular com DDD" type="tel" inputmode="tel" autocomplete="tel-national" :formatar="formatarTelefone" />
         <UiBotao variante="secundario" tamanho="sm" class="self-start" @click="toast.info('Em breve', 'A troca de senha entra junto com o backend.')">
           <UiIcone nome="cadeado" :tamanho="16" /> Trocar senha
         </UiBotao>

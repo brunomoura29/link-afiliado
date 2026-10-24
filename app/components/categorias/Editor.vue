@@ -23,13 +23,7 @@ watch(() => r.nome, (nome) => {
   if (!tocado.padraoNome) r.padraoNome = nome.trim() ? `${nome.trim()} #` : ''
 })
 const editar = (campo: keyof typeof tocado) => (tocado[campo] = true)
-watch(() => r.slug, (v) => {
-  const limpo = v.toLowerCase().replace(/[^a-z0-9-]/g, '')
-  if (limpo !== v) r.slug = limpo
-})
-watch(() => r.palavraChave, (v) => {
-  if (v !== v.toUpperCase()) r.palavraChave = v.toUpperCase()
-})
+const maiusculas = (v: string) => v.toUpperCase()
 
 const escolhendoEmoji = ref(false)
 const erros = reactive({ nome: '', slug: '', palavraChave: '' })
@@ -41,6 +35,7 @@ const qtdGrupos = computed(() => daCategoria(r.id).length)
 const salvando = ref(false)
 const salvo = ref(false)
 async function salvar() {
+  r.slug = gerarSlug(r.slug) // tira hífen sobrando no fim
   erros.nome = r.nome.trim().length < 2 ? 'Dê um nome para a categoria' : ''
   erros.slug = !r.slug ? 'Informe o endereço do link'
     : outras.value.some(c => c.slug === r.slug) ? 'Esse endereço já é de outra categoria' : ''
@@ -106,11 +101,13 @@ async function excluir() {
         rotulo="Endereço do link de entrada"
         :erro="erros.slug"
         :dica="`linkafiliado.app/g/${r.slug || '…'}`"
+        :formatar="limparSlug"
         @input="editar('slug')"
       />
       <UiCampo
         v-model="r.palavraChave"
         rotulo="Palavra-chave"
+        :formatar="maiusculas"
         :erro="erros.palavraChave"
         dica="Quem mandar essa mensagem no seu WhatsApp recebe o convite do grupo."
         @input="editar('palavraChave')"

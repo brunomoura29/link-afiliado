@@ -1,8 +1,10 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'autenticacao', pageTransition: { name: 'auth', mode: 'out-in' } })
+definePageMeta({ layout: 'autenticacao', middleware: 'convidado', pageTransition: { name: 'auth', mode: 'out-in' } })
 useHead({ title: 'Criar conta · LinkAfiliado' })
 
 const { disparar } = useConfete()
+const toast = useToast()
+const supabase = useSupabaseClient()
 
 const dados = reactive({ nome: '', email: '', telefone: '', senha: '' })
 const erros = reactive({ nome: '', email: '', telefone: '', senha: '' })
@@ -13,10 +15,6 @@ const botao = ref<{ $el: HTMLElement }>()
 for (const campo of Object.keys(dados) as (keyof typeof dados)[]) {
   watch(() => dados[campo], () => (erros[campo] = ''))
 }
-watch(() => dados.telefone, (v) => {
-  const f = formatarTelefone(v)
-  if (f !== v) dados.telefone = f
-})
 
 async function criar() {
   erros.nome = dados.nome.trim().length < 2 ? 'Informe seu nome' : ''
@@ -26,8 +24,23 @@ async function criar() {
   if (Object.values(erros).some(Boolean)) return
 
   criando.value = true
-  await new Promise(r => setTimeout(r, 1400)) // TODO: Supabase Auth (signUp) + perfil com nome e telefone
+  // Nome e telefone vão nos metadados; o gatilho do banco cria o perfil e as configurações
+  const { error } = await supabase.auth.signUp({
+    email: dados.email.trim(),
+    password: dados.senha,
+    options: { data: { nome: dados.nome.trim(), telefone: dados.telefone } }
+  })
   criando.value = false
+
+  if (error) {
+    if (error.code === 'user_already_exists' || error.code === 'email_exists') erros.email = 'Já existe uma conta com esse e-mail'
+    else if (error.code === 'weak_password') erros.senha = 'Senha fraca: use letras e números'
+    // Telefone repetido quebra o índice único do perfil e o Supabase devolve erro genérico de banco
+    else if (error.code === 'unexpected_failure' || error.status === 500) erros.telefone = 'Esse celular já tem uma conta'
+    else toast.erro('Não foi possível criar a conta', 'Verifique sua internet e tente de novo.')
+    return
+  }
+
   criado.value = true
   disparar(botao.value?.$el ?? null, 40)
   await new Promise(r => setTimeout(r, 900))
@@ -50,7 +63,7 @@ async function criar() {
         <UiCampo v-model="dados.email" rotulo="E-mail" type="email" inputmode="email" autocomplete="email" :erro="erros.email" />
       </div>
       <div class="animate-fade-up [animation-delay:200ms]">
-        <UiCampo v-model="dados.telefone" rotulo="Celular com DDD" type="tel" inputmode="tel" autocomplete="tel-national" :erro="erros.telefone" />
+        <UiCampo v-model="dados.telefone" rotulo="Celular com DDD" type="tel" inputmode="tel" autocomplete="tel-national" :formatar="formatarTelefone" :erro="erros.telefone" />
       </div>
       <div class="animate-fade-up [animation-delay:250ms]">
         <UiCampoSenha v-model="dados.senha" nova :erro="erros.senha" />

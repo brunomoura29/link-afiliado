@@ -3,14 +3,13 @@ definePageMeta({ layout: 'painel', pageTransition: { name: 'pagina', mode: 'out-
 useHead({ title: 'Início · LinkAfiliado' })
 
 const toast = useToast()
-const usuario = USUARIO_EXEMPLO // TODO: dados reais do Supabase
+const { primeiroNome } = usePerfil()
 const { estado: whatsapp, conectado: whatsappConectado } = useWhatsapp()
 const painel = PAINEL_EXEMPLO
 const { ofertas } = useOfertas()
 const { categorias } = useGrupos()
 const ultimas = computed(() => [...ofertas.value].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).slice(0, 4))
 const nomeCategoria = (id: string) => categorias.value.find(c => c.id === id)?.nome ?? 'Sem categoria'
-const primeiroNome = usuario.nome.split(' ')[0]
 
 // Saudação pelo horário do aparelho (só no cliente, para não divergir do servidor)
 const saudacao = ref('Olá')
@@ -53,7 +52,7 @@ const LINKS = [
   <div class="flex flex-col gap-8">
     <!-- Saudação -->
     <header>
-      <h1 class="animate-fade-up text-[26px] font-semibold leading-8 tracking-tight">{{ saudacao }}, {{ primeiroNome }} 👋</h1>
+      <h1 class="animate-fade-up text-[26px] font-semibold leading-8 tracking-tight">{{ saudacao }}{{ primeiroNome ? `, ${primeiroNome}` : '' }} 👋</h1>
       <p class="mt-1 animate-fade-up text-muted [animation-delay:60ms]">Veja como estão suas ofertas hoje.</p>
     </header>
 

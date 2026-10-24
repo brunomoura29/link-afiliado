@@ -24,11 +24,7 @@ const vista = computed(() =>
 // Número para o código de pareamento
 const numero = ref('')
 const erroNumero = ref('')
-watch(numero, (v) => {
-  erroNumero.value = ''
-  const f = formatarTelefone(v)
-  if (f !== v) numero.value = f
-})
+watch(numero, () => (erroNumero.value = ''))
 
 async function iniciar() {
   if (modo.value === 'codigo' && !ehTelefone(numero.value)) {
@@ -204,6 +200,7 @@ const MODOS = [
                   v-model="numero"
                   rotulo="Número do WhatsApp com DDD"
                   type="tel"
+                  :formatar="formatarTelefone"
                   inputmode="tel"
                   autocomplete="tel-national"
                   :erro="erroNumero"

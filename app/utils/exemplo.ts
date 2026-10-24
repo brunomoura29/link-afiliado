@@ -79,12 +79,6 @@ const GRUPOS: Record<string, GrupoPublico> = {
   }
 }
 
-export const USUARIO_EXEMPLO = {
-  nome: 'Ana Souza',
-  loja: 'Loja da Ana',
-  email: 'ana@exemplo.com'
-}
-
 export const PAINEL_EXEMPLO = {
   hoje: { ofertas: 12, enviadas: 34, naFila: 3, rejeitadas: 1, cliquesEntrada: 87 },
   linkFormulario: 'https://linkafiliado.app/f/a8Kx92mPq7Zt',

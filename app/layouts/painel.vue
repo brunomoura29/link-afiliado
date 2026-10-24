@@ -1,7 +1,8 @@
 <script setup lang="ts">
 const rota = useRoute()
 const { escuro, alternar } = useTema()
-const usuario = USUARIO_EXEMPLO // TODO: usuário logado (Supabase)
+const { nome, email, iniciais, carregar, sair } = usePerfil()
+await useAsyncData('perfil', carregar)
 const { conectado: whatsappConectado } = useWhatsapp()
 
 const ITENS = [
@@ -28,8 +29,6 @@ const fecharComEsc = (e: KeyboardEvent) => e.key === 'Escape' && (maisAberto.val
 onMounted(() => window.addEventListener('keydown', fecharComEsc))
 onBeforeUnmount(() => window.removeEventListener('keydown', fecharComEsc))
 
-const iniciais = computed(() => usuario.nome.split(' ').map(p => p[0]).slice(0, 2).join(''))
-const sair = () => navigateTo('/login')
 </script>
 
 <template>
@@ -64,8 +63,8 @@ const sair = () => navigateTo('/login')
         <div class="flex items-center gap-3 px-1">
           <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-fg text-label font-semibold text-bg">{{ iniciais }}</span>
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-label font-semibold">{{ usuario.nome }}</span>
-            <span class="block truncate text-[12px] text-muted">{{ usuario.email }}</span>
+            <span class="block truncate text-label font-semibold">{{ nome }}</span>
+            <span class="block truncate text-[12px] text-muted">{{ email }}</span>
           </span>
           <button
             type="button"

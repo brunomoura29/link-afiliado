@@ -30,9 +30,14 @@ export default defineNuxtConfig({
     cssPath: '~/assets/css/main.css'
   },
 
-  // Temporário: enquanto o front é feito com dados de exemplo.
-  // Religar no backend (painel protegido, /f/** e /login públicos).
+  // Só o painel exige login; /login, /cadastro, /f/<token>, /g/<slug> e /amostra são públicos.
   supabase: {
-    redirect: false
+    redirect: true,
+    redirectOptions: {
+      login: '/login',
+      callback: '/login', // sem confirmação de e-mail, não há callback de verdade
+      include: ['/painel', '/painel/*'],
+      saveRedirectToCookie: true
+    }
   }
 })

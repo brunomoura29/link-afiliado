@@ -37,7 +37,7 @@ onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <template>
-  <div class="relative flex min-h-full flex-col justify-between gap-10 p-10 xl:p-14 baixa:gap-6 baixa:py-7">
+  <div class="relative flex min-h-full flex-col gap-10 p-10 xl:p-14 baixa:gap-6 baixa:py-7">
     <!-- Brilho -->
     <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
       <div class="brilho absolute -left-24 top-1/3 size-[480px] rounded-full bg-[#25d366]/20 blur-3xl" />
@@ -45,7 +45,8 @@ onBeforeUnmount(() => clearInterval(timer))
 
     <Logo claro class="relative" />
 
-    <div class="relative grid items-center gap-10 ampla:grid-cols-[1fr_300px]">
+    <!-- my-auto: centraliza no espaço livre, com ou sem o rodapé (escondido em telas baixas) -->
+    <div class="relative my-auto grid items-center gap-10 ampla:grid-cols-[1fr_300px]">
       <div>
         <h2 class="max-w-lg text-[32px] font-semibold leading-10 tracking-tight baixa:text-[28px] baixa:leading-9 ampla:text-[40px] ampla:leading-[48px]">
           Suas ofertas no WhatsApp,

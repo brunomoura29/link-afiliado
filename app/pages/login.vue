@@ -1,8 +1,10 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'autenticacao', pageTransition: { name: 'auth', mode: 'out-in' } })
+definePageMeta({ layout: 'autenticacao', middleware: 'convidado', pageTransition: { name: 'auth', mode: 'out-in' } })
 useHead({ title: 'Entrar · LinkAfiliado' })
 
 const toast = useToast()
+const supabase = useSupabaseClient()
+const redirecionamento = useSupabaseCookieRedirect()
 
 const usuario = ref('')
 const senha = ref('')
@@ -13,13 +15,6 @@ const entrou = ref(false)
 watch(usuario, () => (erros.usuario = ''))
 watch(senha, () => (erros.senha = ''))
 
-// Se só tiver dígitos/pontuação de telefone, formata enquanto digita
-watch(usuario, (v) => {
-  if (/^[\d()\s-]+$/.test(v)) {
-    const f = formatarTelefone(v)
-    if (f !== v) usuario.value = f
-  }
-})
 
 async function entrar() {
   erros.usuario = !usuario.value ? 'Informe seu e-mail ou telefone'
@@ -28,11 +23,40 @@ async function entrar() {
   if (erros.usuario || erros.senha) return
 
   entrando.value = true
-  await new Promise(r => setTimeout(r, 1200)) // TODO: Supabase Auth
+  const codigo = ehEmail(usuario.value) ? await entrarComEmail() : await entrarComTelefone()
   entrando.value = false
+  if (codigo === 'invalid_credentials') {
+    erros.senha = 'E-mail, telefone ou senha incorretos'
+    return
+  }
+  if (codigo) {
+    toast.erro('Não foi possível entrar', codigo === 'over_request_rate_limit'
+      ? 'Muitas tentativas. Espere um pouco e tente de novo.'
+      : 'Verifique sua internet e tente de novo.')
+    return
+  }
+
   entrou.value = true
-  await new Promise(r => setTimeout(r, 600))
-  await navigateTo('/painel')
+  await new Promise(r => setTimeout(r, 500))
+  // Volta para a página que a pessoa tentou abrir antes do login (se houver)
+  const destino = redirecionamento.pluck() || '/painel'
+  // Recarrega para o navegador pegar a sessão que o servidor gravou nos cookies (login por telefone)
+  reloadNuxtApp({ path: destino })
+}
+
+// Devolvem '' quando deu certo, ou o código do erro
+async function entrarComEmail() {
+  const { error } = await supabase.auth.signInWithPassword({ email: usuario.value.trim(), password: senha.value })
+  return error ? (error.code ?? 'desconhecido') : ''
+}
+
+async function entrarComTelefone() {
+  try {
+    await $fetch('/api/auth/login-telefone', { method: 'POST', body: { telefone: usuario.value, senha: senha.value } })
+    return ''
+  } catch (e) {
+    return (e as { statusCode?: number }).statusCode === 401 ? 'invalid_credentials' : 'desconhecido'
+  }
 }
 </script>
 
@@ -49,6 +73,7 @@ async function entrar() {
           v-model="usuario"
           rotulo="E-mail ou telefone"
           autocomplete="username"
+          :formatar="formatarEmailOuTelefone"
           inputmode="email"
           :erro="erros.usuario"
         />
