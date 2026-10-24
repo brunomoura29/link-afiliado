@@ -1,11 +1,12 @@
 <script setup lang="ts">
-defineProps<{ rotulo: string, descricao?: string }>()
+// Sem `rotulo`, vira só a chave (passe `aria-label` para acessibilidade).
+defineProps<{ rotulo?: string, descricao?: string, ariaLabel?: string }>()
 const ligado = defineModel<boolean>({ default: false })
 </script>
 
 <template>
-  <label class="flex cursor-pointer items-center justify-between gap-4">
-    <span>
+  <component :is="rotulo ? 'label' : 'span'" class="flex cursor-pointer items-center justify-between gap-4">
+    <span v-if="rotulo">
       <span class="block">{{ rotulo }}</span>
       <span v-if="descricao" class="block text-label text-muted">{{ descricao }}</span>
     </span>
@@ -13,6 +14,7 @@ const ligado = defineModel<boolean>({ default: false })
       type="button"
       role="switch"
       :aria-checked="ligado"
+      :aria-label="rotulo ? undefined : ariaLabel"
       class="relative h-8 w-[52px] shrink-0 rounded-full transition-colors duration-300"
       :class="ligado ? 'bg-fg' : 'bg-line'"
       @click="ligado = !ligado"
@@ -22,5 +24,5 @@ const ligado = defineModel<boolean>({ default: false })
         :class="ligado ? 'translate-x-5' : 'translate-x-0'"
       />
     </button>
-  </label>
+  </component>
 </template>

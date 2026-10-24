@@ -2,6 +2,7 @@
 const rota = useRoute()
 const { escuro, alternar } = useTema()
 const usuario = USUARIO_EXEMPLO // TODO: usuário logado (Supabase)
+const { conectado: whatsappConectado } = useWhatsapp()
 
 const ITENS = [
   { to: '/painel', rotulo: 'Início', icone: 'casa' },
@@ -55,10 +56,10 @@ const sair = () => navigateTo('/login')
       <div class="flex flex-col gap-3 border-t border-line p-3">
         <NuxtLink to="/painel/whatsapp" class="flex items-center gap-2 rounded px-3 py-2 text-label transition-colors hover:bg-line/50">
           <span class="relative flex size-2">
-            <span v-if="usuario.whatsapp.conectado" class="absolute inset-0 animate-ring-out rounded-full bg-whatsapp" />
-            <span class="relative size-2 rounded-full" :class="usuario.whatsapp.conectado ? 'bg-whatsapp' : 'bg-status-rejeitada'" />
+            <span v-if="whatsappConectado" class="absolute inset-0 animate-ring-out rounded-full bg-whatsapp" />
+            <span class="relative size-2 rounded-full" :class="whatsappConectado ? 'bg-whatsapp' : 'bg-status-rejeitada'" />
           </span>
-          <span class="text-muted">{{ usuario.whatsapp.conectado ? 'WhatsApp conectado' : 'WhatsApp desconectado' }}</span>
+          <span class="text-muted">{{ whatsappConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado' }}</span>
         </NuxtLink>
         <div class="flex items-center gap-3 px-1">
           <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-fg text-label font-semibold text-bg">{{ iniciais }}</span>
@@ -93,12 +94,12 @@ const sair = () => navigateTo('/login')
         <div class="flex items-center gap-2">
           <NuxtLink
             to="/painel/whatsapp"
-            :aria-label="usuario.whatsapp.conectado ? 'WhatsApp conectado' : 'WhatsApp desconectado'"
+            :aria-label="whatsappConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado'"
             class="flex h-9 items-center gap-2 rounded-full border border-line px-3 text-label"
           >
             <span class="relative flex size-2">
-              <span v-if="usuario.whatsapp.conectado" class="absolute inset-0 animate-ring-out rounded-full bg-whatsapp" />
-              <span class="relative size-2 rounded-full" :class="usuario.whatsapp.conectado ? 'bg-whatsapp' : 'bg-status-rejeitada'" />
+              <span v-if="whatsappConectado" class="absolute inset-0 animate-ring-out rounded-full bg-whatsapp" />
+              <span class="relative size-2 rounded-full" :class="whatsappConectado ? 'bg-whatsapp' : 'bg-status-rejeitada'" />
             </span>
             WhatsApp
           </NuxtLink>

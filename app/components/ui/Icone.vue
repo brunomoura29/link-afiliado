@@ -28,7 +28,10 @@ const ICONES = {
   ajustes: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
   sair: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   compartilhar: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>',
-  'seta-direita': '<path d="M5 12h14M12 5l7 7-7 7"/>'
+  'seta-direita': '<path d="M5 12h14M12 5l7 7-7 7"/>',
+  'seta-cima': '<path d="m18 15-6-6-6 6"/>',
+  qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-4M14 17v4"/>',
+  baixar: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>'
 } as const
 
 withDefaults(defineProps<{ nome: keyof typeof ICONES, tamanho?: number, traco?: number }>(), {

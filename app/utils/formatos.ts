@@ -22,3 +22,27 @@ export function forcaSenha(senha: string) {
   if (/[^A-Za-z0-9]/.test(senha) || senha.length >= 12) pontos++
   return senha ? Math.max(pontos, 1) : 0
 }
+
+const semAcento = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '')
+
+// "Casa e Cozinha" → "casa-e-cozinha" (endereço do link /g/...)
+export const gerarSlug = (t: string) =>
+  semAcento(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+
+// "Casa e Cozinha" → "QUERO CASA" (palavra-chave para pedir o convite)
+export const gerarPalavraChave = (t: string) => {
+  const primeira = semAcento(t).toUpperCase().match(/[A-Z0-9]{3,}/)?.[0]
+  return primeira ? `QUERO ${primeira}` : ''
+}
+
+// "agora", "há 5 min", "há 2 h", "há 3 dias"
+export function tempoRelativo(iso: string | null) {
+  if (!iso) return 'nunca'
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
+  if (min < 1) return 'agora'
+  if (min < 60) return `há ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `há ${h} h`
+  const d = Math.floor(h / 24)
+  return d === 1 ? 'ontem' : `há ${d} dias`
+}

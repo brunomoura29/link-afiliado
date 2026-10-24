@@ -229,6 +229,12 @@ próxima (ver checklist de aceite no fim).
   (QR code) + status → listar grupos (sincronizar em `whatsapp_destinos`) →
   enviar mensagem → webhook de status/desconexão. Pedir a doc de cada
   endpoint ao usuário antes de implementar.
+- **Dois modos de conexão** (tela `/painel/whatsapp`, estado em
+  `useWhatsapp`): **código de pareamento pelo número** (padrão no celular —
+  o afiliado só tem o celular, então não consegue escanear um QR exibido
+  nele mesmo) e **QR code** (padrão no desktop). Código/QR vencem
+  (~45s): renovar até 3 vezes e depois voltar a "desconectado". Pedir a
+  doc da UazAPI para os dois (QR e pair code).
 - Número dedicado recomendado ao cliente, nunca o principal.
 - Nunca enviar em sequência imediata — sempre via fila (próximo item).
 
@@ -272,6 +278,20 @@ sistema só torna isso fácil. Três mecanismos, todos no projeto:
   conversa, então há consentimento. Responder só a quem pediu; limitar
   respostas por número para evitar abuso.
 
+**O que cada caminho captura (tela `/painel/leads`)**
+- Clique em `/g/<slug>`: **só quantidade** — categoria, data, `src`,
+  referrer, tipo de aparelho. Sem nome/número; não guardar IP identificável
+  (no máximo hash anônimo para deduplicar).
+- Palavra-chave (webhook de mensagem): **número + nome de perfil
+  (pushName)** — pushName pode ser apelido/emoji/vazio. Único caminho com
+  consentimento claro e identificação; é o que alimenta a lista de leads.
+- Entrada no grupo (webhook de participante): **identificador do
+  participante** (normalmente o número; nome raramente). O WhatsApp pode
+  entregar um ID anônimo (LID) em vez do número — confirmar na doc da UazAPI.
+- Clique → entrada não se liga individualmente (o convite abre o app);
+  só por estimativa agregada. Palavra-chave → entrada liga pelo número
+  (badge "Entrou"). Não pedir dados na página de entrada (atrito).
+
 **Extras**
 - Boas-vindas automáticas no grupo (webhook de participante entrou).
 - Grupos em modo "só admins enviam" por padrão.
@@ -279,7 +299,15 @@ sistema só torna isso fácil. Três mecanismos, todos no projeto:
   suportar.
 
 **Dados** (todas com `owner_id` + RLS):
-- `categorias.slug` (unique por owner) e `categorias.palavra_chave`.
+- `categorias`: + `emoji`, `slug` (unique por owner; gerado do nome),
+  `palavra_chave` (unique por owner; ex. "QUERO CASA"), `descricao` (página
+  de entrada), `auto_criar` (cria grupo ao lotar), `padrao_nome` (nome dos
+  grupos novos, `#` vira o número), `so_admins` (config dos grupos novos).
+  Excluir categoria → grupos dela viram "sem categoria" e param de receber.
+- Criar grupo pelo painel (botão "Novo grupo" na tela de Grupos) usa
+  `padrao_nome` e `so_admins` da categoria e entra no fim da rotação. O
+  WhatsApp exige ao menos 1 participante ao criar grupo — confirmar na doc
+  da UazAPI como tratar.
 - `whatsapp_destinos`: + `convite_url`, `membros`, `capacidade`, `ordem`,
   `ativo_para_entrada` (qual grupo recebe novos membros), `admin boolean`.
 - `cliques_entrada` (categoria_id, destino_id, origem, criado_em).

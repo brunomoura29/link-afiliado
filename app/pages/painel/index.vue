@@ -4,7 +4,12 @@ useHead({ title: 'Início · LinkAfiliado' })
 
 const toast = useToast()
 const usuario = USUARIO_EXEMPLO // TODO: dados reais do Supabase
+const { estado: whatsapp, conectado: whatsappConectado } = useWhatsapp()
 const painel = PAINEL_EXEMPLO
+const { ofertas } = useOfertas()
+const { categorias } = useGrupos()
+const ultimas = computed(() => [...ofertas.value].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).slice(0, 4))
+const nomeCategoria = (id: string) => categorias.value.find(c => c.id === id)?.nome ?? 'Sem categoria'
 const primeiroNome = usuario.nome.split(' ')[0]
 
 // Saudação pelo horário do aparelho (só no cliente, para não divergir do servidor)
@@ -56,16 +61,16 @@ const LINKS = [
     <NuxtLink
       to="/painel/whatsapp"
       class="group flex animate-fade-up items-center gap-4 rounded-lg border p-4 transition-colors [animation-delay:100ms]"
-      :class="usuario.whatsapp.conectado ? 'border-whatsapp/40 bg-whatsapp/[.06]' : 'border-status-rejeitada/40 bg-status-rejeitada/5'"
+      :class="whatsappConectado ? 'border-whatsapp/40 bg-whatsapp/[.06]' : 'border-status-rejeitada/40 bg-status-rejeitada/5'"
     >
-      <span class="relative flex size-11 shrink-0 items-center justify-center rounded-full" :class="usuario.whatsapp.conectado ? 'bg-whatsapp text-[#0b3d1f]' : 'bg-status-rejeitada text-white'">
-        <span v-if="usuario.whatsapp.conectado" class="absolute inset-0 animate-ring-out rounded-full bg-whatsapp" />
+      <span class="relative flex size-11 shrink-0 items-center justify-center rounded-full" :class="whatsappConectado ? 'bg-whatsapp text-[#0b3d1f]' : 'bg-status-rejeitada text-white'">
+        <span v-if="whatsappConectado" class="absolute inset-0 animate-ring-out rounded-full bg-whatsapp" />
         <UiIcone nome="celular" :tamanho="20" class="relative" />
       </span>
       <span class="min-w-0 flex-1">
-        <span class="block font-semibold">{{ usuario.whatsapp.conectado ? 'WhatsApp conectado' : 'WhatsApp desconectado' }}</span>
+        <span class="block font-semibold">{{ whatsappConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado' }}</span>
         <span class="block truncate text-label text-muted">
-          {{ usuario.whatsapp.conectado ? `${usuario.whatsapp.numero} · enviando normalmente` : 'Conecte para voltar a enviar' }}
+          {{ whatsappConectado ? `${whatsapp.numero} · enviando normalmente` : 'Conecte para voltar a enviar' }}
         </span>
       </span>
       <UiIcone nome="seta-direita" :tamanho="18" class="text-muted transition-transform duration-300 ease-spring group-hover:translate-x-1" />
@@ -119,14 +124,16 @@ const LINKS = [
         </NuxtLink>
       </div>
       <UiCard class="divide-y divide-line overflow-hidden">
-        <div v-for="(o, i) in painel.ultimas" :key="o.id" v-reveal="i * 60" class="flex items-center gap-3 p-4">
+        <NuxtLink v-for="(o, i) in ultimas" :key="o.id" v-reveal="i * 60" to="/painel/ofertas" class="flex items-center gap-3 p-4 transition-colors hover:bg-surface/60">
           <span class="size-2.5 shrink-0 rounded-full" :style="{ background: corPlataforma(o.plataforma) }" />
           <div class="min-w-0 flex-1">
-            <p class="truncate">{{ o.titulo }}</p>
-            <p class="text-label text-muted">{{ formatarPreco(o.preco) }} · {{ o.categoria }} · {{ o.quando }}</p>
+            <p class="truncate">{{ o.titulo ?? 'Lendo o produto…' }}</p>
+            <p class="truncate text-label text-muted">
+              <template v-if="o.preco != null">{{ formatarPreco(o.preco) }} · </template>{{ nomeCategoria(o.categoriaId) }} · {{ tempoRelativo(o.criadaEm) }}
+            </p>
           </div>
           <UiStatus :status="o.status" class="shrink-0" />
-        </div>
+        </NuxtLink>
       </UiCard>
     </section>
   </div>
