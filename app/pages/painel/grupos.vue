@@ -17,7 +17,15 @@ const busca = ref('')
 const normalizar = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 const filtrar = (lista: Grupo[]) => busca.value ? lista.filter(g => normalizar(g.nome).includes(normalizar(busca.value))) : lista
 
-const semCategoria = computed(() => filtrar(daCategoria(null)))
+// "Sem categoria": por padrão só os grupos onde o número é admin e pode enviar (os úteis
+// para ofertas). Os outros (família, trabalho…) ficam ocultos atrás de "mostrar todos".
+// Buscando por nome, procura em todos.
+const mostrarTodos = ref(false)
+const util = (g: Grupo) => g.admin && g.podeEnviar
+const semCategoriaTodos = computed(() => filtrar(daCategoria(null)))
+const semCategoria = computed(() => mostrarTodos.value || busca.value ? semCategoriaTodos.value : semCategoriaTodos.value.filter(util))
+const ocultos = computed(() => semCategoriaTodos.value.length - semCategoria.value.length)
+const comoAdmin = computed(() => grupos.value.filter(g => g.admin).length)
 const totalMembros = computed(() => grupos.value.reduce((s, g) => s + g.membros, 0))
 const recebendo = computed(() => grupos.value.filter(g => g.categoriaId && g.recebeOfertas).length)
 const membrosDa = (c: CategoriaGrupo) => daCategoria(c.id).reduce((s, g) => s + g.membros, 0)
@@ -158,6 +166,7 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
     <div class="flex animate-fade-up flex-wrap gap-2 [animation-delay:100ms]">
       <span class="rounded-full border border-line px-3 py-1 text-label"><strong>{{ grupos.length }}</strong> <span class="text-muted">grupos</span></span>
       <span class="rounded-full border border-line px-3 py-1 text-label"><strong>{{ totalMembros.toLocaleString('pt-BR') }}</strong> <span class="text-muted">membros</span></span>
+      <span class="rounded-full border border-line px-3 py-1 text-label"><strong>{{ comoAdmin }}</strong> <span class="text-muted">em que você é admin</span></span>
       <span class="rounded-full border border-line px-3 py-1 text-label"><strong>{{ recebendo }}</strong> <span class="text-muted">recebendo ofertas</span></span>
     </div>
 
@@ -231,13 +240,29 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
     </section>
 
     <!-- Sem categoria -->
-    <section v-if="semCategoria.length" v-reveal>
-      <div class="mb-3">
-        <h2 class="font-semibold">Sem categoria</h2>
-        <p class="text-label text-muted">Esses grupos não recebem ofertas até você escolher uma categoria.</p>
+    <section v-if="semCategoriaTodos.length" v-reveal>
+      <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 class="font-semibold">Sem categoria</h2>
+          <p class="text-label text-muted">
+            {{ mostrarTodos || busca ? 'Todos os grupos sem categoria.' : 'Grupos em que você é admin e pode enviar.' }}
+            Eles não recebem ofertas até você escolher uma categoria.
+          </p>
+        </div>
+        <button
+          v-if="!busca && (ocultos || mostrarTodos)"
+          type="button"
+          class="text-label font-semibold text-muted underline decoration-line underline-offset-4 transition-colors hover:text-fg"
+          @click="mostrarTodos = !mostrarTodos"
+        >
+          {{ mostrarTodos ? 'Mostrar só onde sou admin' : `Mostrar todos (+${ocultos} ocultos)` }}
+        </button>
       </div>
-      <UiCard class="divide-y divide-line overflow-hidden">
+      <UiCard v-if="semCategoria.length" class="divide-y divide-line overflow-hidden">
         <GruposLinha v-for="g in semCategoria" :key="g.id" :grupo="g" sem-categoria @abrir="selecionado = g" />
+      </UiCard>
+      <UiCard v-else class="p-4 text-label text-muted">
+        Nenhum grupo sem categoria em que você é admin. Os que você já organizou estão nas categorias acima.
       </UiCard>
     </section>
 
