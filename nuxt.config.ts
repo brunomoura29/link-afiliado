@@ -27,6 +27,9 @@ export default defineNuxtConfig({
     // Só no servidor. Em produção: NUXT_OPENROUTER_API_KEY / NUXT_OPENROUTER_MODELO
     openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
     openrouterModelo: process.env.OPENROUTER_MODELO ?? 'anthropic/claude-haiku-5.5',
+    // UazAPI (WhatsApp). Em produção: NUXT_UAZAPI_URL / NUXT_UAZAPI_ADMIN_TOKEN
+    uazapiUrl: process.env.UAZAPI_URL ?? '',
+    uazapiAdminToken: process.env.UAZAPI_ADMIN_TOKEN ?? '',
     public: {
       urlBase: '' // NUXT_PUBLIC_URL_BASE em produção (ex.: https://linkafiliado.app)
     }

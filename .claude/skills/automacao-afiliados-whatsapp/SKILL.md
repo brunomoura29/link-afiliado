@@ -285,6 +285,14 @@ próxima (ver checklist de aceite no fim).
   (~45s): renovar até 3 vezes e depois voltar a "desconectado". Pedir a
   doc da UazAPI para os dois (QR e pair code).
 - Número dedicado recomendado ao cliente, nunca o principal.
+- **Instância (implementado)** — `server/utils/uazapi.ts`: `POST /instance/create`
+  com header `admintoken` (env `UAZAPI_URL`, `UAZAPI_ADMIN_TOKEN`), corpo
+  `{ name, systemName: "LinkAfiliado", adminField01: owner_id }`. Resposta traz
+  `instance.token` (guardar em `whatsapp_credenciais`, nunca no navegador) e
+  `instance.id`. Criada sob demanda (`POST /api/whatsapp/instancia`), uma por
+  cliente. Status da UazAPI: disconnected | connecting | connected | hibernated.
+  **429 = limite de instâncias do plano** (`max_instances`): cada cliente
+  consome 1 instância → o plano da UazAPI precisa crescer com os clientes.
 - Nunca enviar em sequência imediata — sempre via fila (próximo item).
 
 ### 7. Fila de envio (cron)

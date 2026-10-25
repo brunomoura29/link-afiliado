@@ -429,18 +429,21 @@ export type Database = {
         Row: {
           criado_em: string
           instancia: string
+          instancia_id: string | null
           owner_id: string
           token: string
         }
         Insert: {
           criado_em?: string
           instancia: string
+          instancia_id?: string | null
           owner_id: string
           token: string
         }
         Update: {
           criado_em?: string
           instancia?: string
+          instancia_id?: string | null
           owner_id?: string
           token?: string
         }
