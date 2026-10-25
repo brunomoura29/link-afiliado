@@ -325,6 +325,15 @@ próxima (ver checklist de aceite no fim).
   ~5 s. **`invite_link` não veio na listagem** (0 de 55) → convite precisa de
   outra rota (pedir a doc). Há grupo com 1.525 membros (> 1.024): hoje conta
   como lotado.
+- **Grupo ↔ categoria (decidido):** cada grupo em **uma** categoria; categoria
+  com vários grupos. Categoria com `recebe_todas = true` ("geral") faz os
+  grupos dela receberem as ofertas de **todas** as categorias. Fila de envio:
+  grupos da categoria da oferta + das categorias `recebe_todas`, com
+  `recebe_ofertas` e `pode_enviar`.
+- **Telas:** `/painel/grupos` = só a lista de grupos (etiqueta da categoria,
+  filtro por categoria, "só onde sou admin"); `/painel/categorias` = cards com os
+  grupos de cada uma; `/painel/categorias/[id]` = link de entrada, grupos na
+  ordem de rotação (setas), adicionar grupos existentes, novo grupo.
 - Nunca enviar em sequência imediata — sempre via fila (próximo item).
 
 ### 7. Fila de envio (cron)

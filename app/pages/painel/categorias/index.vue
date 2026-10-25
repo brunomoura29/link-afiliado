@@ -46,7 +46,7 @@ function resumo(c: CategoriaGrupo) {
         type="button"
         class="group flex h-full flex-col gap-3 rounded-lg border border-line bg-elevated p-4 text-left shadow-card transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-pop active:scale-[.99]"
         :class="!c.ativa && 'opacity-60'"
-        @click="editando = c"
+        @click="navigateTo(`/painel/categorias/${c.id}`)"
       >
         <div class="flex items-center gap-3">
           <span class="flex size-11 shrink-0 items-center justify-center rounded bg-surface text-[22px] transition-transform duration-500 ease-spring group-hover:-rotate-6 group-hover:scale-110">{{ c.emoji }}</span>
@@ -67,6 +67,25 @@ function resumo(c: CategoriaGrupo) {
           <span v-if="c.autoCriar" class="inline-flex h-6 items-center gap-1 rounded-full bg-surface px-2 text-[12px] text-muted">
             <UiIcone nome="atualizar" :tamanho="12" /> Cria grupo ao lotar
           </span>
+          <span v-if="c.recebeTodas" class="inline-flex h-6 items-center rounded-full bg-fg px-2 text-[12px] font-semibold text-bg">
+            Recebe tudo
+          </span>
+        </div>
+
+        <!-- Grupos da categoria -->
+        <div class="flex flex-wrap gap-1.5">
+          <span
+            v-for="g in daCategoria(c.id).slice(0, 3)"
+            :key="g.id"
+            class="inline-flex h-6 max-w-[11rem] items-center gap-1 truncate rounded-full border border-line px-2 text-[12px]"
+          >
+            <UiIcone nome="usuarios" :tamanho="12" class="shrink-0 text-muted" />
+            <span class="truncate">{{ g.nome }}</span>
+          </span>
+          <span v-if="daCategoria(c.id).length > 3" class="inline-flex h-6 items-center rounded-full px-1 text-[12px] text-muted">
+            +{{ daCategoria(c.id).length - 3 }}
+          </span>
+          <span v-if="!daCategoria(c.id).length" class="text-[12px] text-muted">Nenhum grupo ainda · toque para adicionar</span>
         </div>
 
         <!-- Rodapé fixo: qual grupo recebe os membros novos -->

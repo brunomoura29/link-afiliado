@@ -15,6 +15,7 @@ export interface CategoriaGrupo {
   autoCriar: boolean // cria o próximo grupo quando o último lota
   padraoNome: string // nome dos grupos novos; "#" vira o número
   soAdmins: boolean // grupos novos só deixam admins enviarem
+  recebeTodas: boolean // "geral": os grupos dela recebem as ofertas de todas as categorias
 }
 
 export interface Grupo {
@@ -45,7 +46,8 @@ const daLinhaCategoria = (c: Tables<'categorias'>): CategoriaGrupo => ({
   ativa: c.ativa,
   autoCriar: c.auto_criar,
   padraoNome: c.padrao_nome,
-  soAdmins: c.so_admins
+  soAdmins: c.so_admins,
+  recebeTodas: c.recebe_todas
 })
 
 const paraLinhaCategoria = (c: CategoriaGrupo): TablesInsert<'categorias'> => ({
@@ -57,7 +59,8 @@ const paraLinhaCategoria = (c: CategoriaGrupo): TablesInsert<'categorias'> => ({
   ativa: c.ativa,
   auto_criar: c.autoCriar,
   padrao_nome: c.padraoNome.trim(),
-  so_admins: c.soAdmins
+  so_admins: c.soAdmins,
+  recebe_todas: c.recebeTodas
 })
 
 const daLinhaGrupo = (g: Tables<'whatsapp_destinos'>): Grupo => ({

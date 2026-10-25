@@ -45,12 +45,16 @@ export async function processarOferta(event: H3Event, ofertaId: string) {
 async function colocarNaFila(event: H3Event, ownerId: string, ofertaId: string, categoriaId: string | null) {
   if (!categoriaId) return
   const admin = serverSupabaseServiceRole(event)
+  // A categoria da oferta + as categorias "geral" (recebem as ofertas de todas)
+  const { data: gerais } = await admin.from('categorias').select('id').eq('owner_id', ownerId).eq('recebe_todas', true).eq('ativa', true)
+  const categorias = [...new Set([categoriaId, ...(gerais ?? []).map(c => c.id)])]
   const { data: grupos } = await admin
     .from('whatsapp_destinos')
     .select('id, nome')
     .eq('owner_id', ownerId)
-    .eq('categoria_id', categoriaId)
+    .in('categoria_id', categorias)
     .eq('recebe_ofertas', true)
+    .eq('pode_enviar', true)
   await admin.from('envios').delete().eq('oferta_id', ofertaId).eq('status', 'na_fila')
   if (grupos?.length) {
     await admin.from('envios').insert(grupos.map(g => ({ owner_id: ownerId, oferta_id: ofertaId, destino_id: g.id, grupo_nome: g.nome })))

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { Grupo } from '~/composables/useGrupos'
+import type { CategoriaGrupo, Grupo } from '~/composables/useGrupos'
 
-const props = defineProps<{ grupo: Grupo, posicao?: number, entradaAtiva?: boolean, lotado?: boolean, semCategoria?: boolean }>()
+// `categoria`: mostra a etiqueta da categoria (lista de Grupos). Na página da categoria não precisa.
+const props = defineProps<{ grupo: Grupo, categoria?: CategoriaGrupo, posicao?: number, entradaAtiva?: boolean, lotado?: boolean, semCategoria?: boolean }>()
 defineEmits<{ abrir: [], ofertas: [recebe: boolean] }>()
 
 const ocupacao = computed(() => Math.min(props.grupo.membros / props.grupo.capacidade, 1))
@@ -35,6 +36,10 @@ const iniciais = computed(() => props.grupo.nome.replace(/[^\p{L}\p{N}\s]/gu, ''
           <span class="text-[12px] tabular-nums text-muted">{{ grupo.membros.toLocaleString('pt-BR') }}/{{ grupo.capacidade.toLocaleString('pt-BR') }}</span>
         </span>
         <span class="mt-1.5 flex flex-wrap gap-1.5">
+          <span v-if="categoria" class="inline-flex h-6 max-w-[12rem] items-center gap-1 rounded-full bg-fg px-2 text-[12px] font-semibold text-bg">
+            <span>{{ categoria.emoji }}</span><span class="truncate">{{ categoria.nome }}</span>
+          </span>
+          <span v-else-if="semCategoria" class="inline-flex h-6 items-center rounded-full border border-dashed border-line px-2 text-[12px] text-muted">Sem categoria</span>
           <span v-if="entradaAtiva" class="inline-flex h-6 items-center gap-1 rounded-full bg-whatsapp/15 px-2 text-[12px] font-semibold">
             <span class="size-1.5 animate-pulse rounded-full bg-whatsapp" /> Recebendo membros
           </span>

@@ -28,6 +28,7 @@ export type Database = {
           owner_id: string
           padrao_nome: string
           palavra_chave: string | null
+          recebe_todas: boolean
           slug: string
           so_admins: boolean
         }
@@ -43,6 +44,7 @@ export type Database = {
           owner_id?: string
           padrao_nome?: string
           palavra_chave?: string | null
+          recebe_todas?: boolean
           slug: string
           so_admins?: boolean
         }
@@ -58,6 +60,7 @@ export type Database = {
           owner_id?: string
           padrao_nome?: string
           palavra_chave?: string | null
+          recebe_todas?: boolean
           slug?: string
           so_admins?: boolean
         }
