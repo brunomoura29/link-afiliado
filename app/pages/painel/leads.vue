@@ -6,7 +6,8 @@ useHead({ title: 'Leads · LinkAfiliado' })
 
 const toast = useToast()
 const { categorias } = useGrupos()
-const { cliquesPorOrigem, cliquesPorCategoria, leadsDoPeriodo, novosMembros } = useLeads()
+const { carregar, cliquesPorOrigem, cliquesPorCategoria, leadsDoPeriodo, novosMembros } = useLeads()
+await useAsyncData('leads', carregar)
 
 const PERIODOS = [
   { valor: 'hoje', rotulo: 'Hoje' },
@@ -20,21 +21,27 @@ const origens = computed(() => cliquesPorOrigem(periodo.value))
 const totalCliques = computed(() => origens.value.reduce((s, o) => s + o.valor, 0))
 const porCategoria = computed(() => cliquesPorCategoria(periodo.value).map((c) => {
   const cat = categorias.value.find(x => x.id === c.id)
-  return { chave: c.id, rotulo: cat ? `${cat.emoji} ${cat.nome}` : c.id, valor: c.valor }
+  return { chave: c.id || 'sem', rotulo: cat ? `${cat.emoji} ${cat.nome}` : 'Categoria excluída', valor: c.valor }
 }))
 const pessoas = computed(() => leadsDoPeriodo(periodo.value))
 const membros = computed(() => novosMembros(periodo.value))
-const porClique = computed(() => totalCliques.value ? (membros.value / totalCliques.value).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '0')
+const porClique = computed(() => membros.value != null && totalCliques.value
+  ? (membros.value / totalCliques.value).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : null)
 const entraram = computed(() => pessoas.value.filter(l => l.entrou).length)
 
 // Funil: cliques → novos membros; palavra-chave ao lado (é o único caminho com nome e número)
 const NUMEROS = computed(() => [
   { rotulo: 'Cliques nos links', valor: totalCliques.value, icone: 'link', nota: 'Só quantidade, sem identificar quem' },
-  { rotulo: 'Novos membros', valor: membros.value, icone: 'usuarios', nota: `≈ ${porClique.value} por clique · todos que entraram nos grupos` },
+  {
+    rotulo: 'Novos membros',
+    valor: membros.value,
+    icone: 'usuarios',
+    nota: membros.value == null ? 'Aparece quando o WhatsApp for conectado' : `${porClique.value ? `≈ ${porClique.value} por clique · ` : ''}todos que entraram nos grupos`
+  },
   { rotulo: 'Pediram pela palavra-chave', valor: pessoas.value.length, icone: 'mensagem', nota: `${entraram.value} já entraram no grupo` }
 ] as const)
 
-const nomeCategoria = (id: string) => {
+const nomeCategoria = (id: string | null) => {
   const c = categorias.value.find(x => x.id === id)
   return c ? `${c.emoji} ${c.nome}` : 'Sem categoria'
 }
@@ -51,7 +58,7 @@ function exportar() {
     ])
   ]
   const csv = linhas.map(c => c.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
   a.download = `leads-${periodo.value}.csv`
@@ -92,7 +99,10 @@ function exportar() {
           <span class="text-label">{{ n.rotulo }}</span>
           <UiIcone :nome="n.icone" :tamanho="16" />
         </div>
-        <p class="mt-2 text-[28px] font-semibold leading-9"><UiContador :valor="n.valor" /></p>
+        <p class="mt-2 text-[28px] font-semibold leading-9">
+          <UiContador v-if="n.valor != null" :valor="n.valor" />
+          <span v-else class="text-muted">—</span>
+        </p>
         <p class="mt-1 text-[12px] text-muted">{{ n.nota }}</p>
       </UiCard>
     </section>
@@ -102,12 +112,14 @@ function exportar() {
       <UiCard v-reveal class="p-5">
         <p class="font-semibold">De onde vêm os cliques</p>
         <p class="mb-5 text-label text-muted">Pela origem no link (ex.: <span class="font-mono">/g/casa-cozinha?src=instagram</span>)</p>
-        <UiBarras :itens="origens" unidade="cliques" />
+        <UiBarras v-if="origens.length" :itens="origens" unidade="cliques" />
+        <p v-else class="text-label text-muted">Nenhum clique {{ periodo === 'hoje' ? 'hoje' : 'nesse período' }}. Divulgue o link de entrada de uma categoria (em Grupos) para começar.</p>
       </UiCard>
       <UiCard v-reveal="80" class="p-5">
         <p class="font-semibold">Cliques por categoria</p>
         <p class="mb-5 text-label text-muted">Qual link de entrada mais atrai gente.</p>
-        <UiBarras :itens="porCategoria" unidade="cliques" />
+        <UiBarras v-if="porCategoria.length" :itens="porCategoria" unidade="cliques" />
+        <p v-else class="text-label text-muted">Os cliques aparecem aqui separados por categoria.</p>
       </UiCard>
     </section>
 

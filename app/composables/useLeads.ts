@@ -1,7 +1,7 @@
 // Captação de membros: cliques nos links de entrada (/g/...) e pessoas que pediram
-// o convite pela palavra-chave. Por enquanto simulado.
-// TODO (Supabase): cliques_entrada + leads. TODO (UazAPI): webhook de mensagem recebida
-// (palavra-chave) e de participante que entrou no grupo.
+// o convite pela palavra-chave. Supabase: cliques_entrada + leads (últimos 30 dias).
+// TODO (UazAPI): leads vêm do webhook de mensagem recebida (palavra-chave) e
+// "novos membros" do webhook de participante que entrou no grupo.
 
 export type Periodo = 'hoje' | '7d' | '30d'
 
@@ -10,10 +10,12 @@ export interface Lead {
   nome: string
   numero: string
   palavraChave: string
-  categoriaId: string
+  categoriaId: string | null
   criadoEm: string
   entrou: boolean // entrou no grupo depois de receber o convite
 }
+
+interface Clique { origem: string, categoriaId: string | null, criadoEm: string }
 
 export const ORIGENS: Record<string, string> = {
   instagram: 'Instagram',
@@ -21,53 +23,64 @@ export const ORIGENS: Record<string, string> = {
   bio: 'Link na bio',
   whatsapp: 'Status do WhatsApp',
   facebook: 'Facebook',
+  youtube: 'YouTube',
+  kwai: 'Kwai',
+  twitter: 'X / Twitter',
+  telegram: 'Telegram',
+  outra: 'Outra origem',
   direto: 'Direto / sem origem'
 }
 
-// Cliques nos últimos 30 dias; os outros períodos são uma fração
-const CLIQUES_30D: Record<string, number> = { instagram: 1240, tiktok: 860, bio: 512, whatsapp: 344, facebook: 120, direto: 208 }
-const POR_CATEGORIA_30D: Record<string, number> = { casa: 1910, eletronicos: 902, beleza: 472 }
-// Entradas nos grupos (webhook de participante) — conta todo mundo, não só quem pediu
-const NOVOS_MEMBROS_30D = 1838
-const FRACAO: Record<Periodo, number> = { hoje: .045, '7d': .27, '30d': 1 }
-
-const minAtras = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
-const NOMES = ['Juliana', 'Carlos', 'Fernanda', 'Rafael', 'Patrícia', 'Marcos', 'Aline', 'Bruno', 'Camila', 'Diego', 'Larissa', 'Thiago']
-const CATS = ['casa', 'casa', 'eletronicos', 'beleza', 'casa', 'eletronicos']
-const PALAVRAS: Record<string, string> = { casa: 'QUERO CASA', eletronicos: 'QUERO TECH', beleza: 'QUERO BELEZA' }
-
-const LEADS: Lead[] = NOMES.map((nome, i) => {
-  const categoriaId = CATS[i % CATS.length]!
-  return {
-    id: `ld${i}`,
-    nome,
-    numero: `+55 (${11 + (i % 9) * 10}) 9${String(8100 + i * 137).slice(0, 4)}-${String(2300 + i * 911).slice(-4)}`,
-    palavraChave: PALAVRAS[categoriaId]!,
-    categoriaId,
-    criadoEm: minAtras([3, 18, 40, 95, 180, 300, 60 * 26, 60 * 30, 60 * 52, 60 * 24 * 4, 60 * 24 * 9, 60 * 24 * 20][i]!),
-    entrou: i % 3 !== 1
+function desde(p: Periodo) {
+  if (p === 'hoje') {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d.getTime()
   }
-})
-
-const LIMITE: Record<Periodo, number> = { hoje: 24 * 60, '7d': 7 * 24 * 60, '30d': 30 * 24 * 60 }
+  return Date.now() - (p === '7d' ? 7 : 30) * 86_400_000
+}
 
 export function useLeads() {
-  const leads = useState<Lead[]>('leads', () => structuredClone(LEADS))
+  const supabase = useSupabaseClient()
+  const cliques = useState<Clique[]>('cliques-entrada', () => [])
+  const leads = useState<Lead[]>('leads', () => [])
 
-  const cliquesPorOrigem = (p: Periodo) =>
-    Object.entries(CLIQUES_30D)
-      .map(([origem, n]) => ({ chave: origem, rotulo: ORIGENS[origem]!, valor: Math.round(n * FRACAO[p]) }))
-      .sort((a, b) => b.valor - a.valor)
-
-  const cliquesPorCategoria = (p: Periodo) =>
-    Object.entries(POR_CATEGORIA_30D).map(([id, n]) => ({ id, valor: Math.round(n * FRACAO[p]) })).sort((a, b) => b.valor - a.valor)
-
-  const leadsDoPeriodo = (p: Periodo) => {
-    const desde = Date.now() - LIMITE[p] * 60_000
-    return leads.value.filter(l => new Date(l.criadoEm).getTime() >= desde).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
+  async function carregar() {
+    const inicio = new Date(desde('30d')).toISOString()
+    const [c, l] = await Promise.all([
+      supabase.from('cliques_entrada').select('origem, categoria_id, criado_em').gte('criado_em', inicio).limit(20_000),
+      supabase.from('leads').select('*').gte('criado_em', inicio).order('criado_em', { ascending: false })
+    ])
+    if (c.error || l.error) throw c.error ?? l.error
+    cliques.value = c.data.map(x => ({ origem: x.origem, categoriaId: x.categoria_id, criadoEm: x.criado_em }))
+    leads.value = l.data.map(x => ({
+      id: x.id, nome: x.nome, numero: x.numero, palavraChave: x.palavra_chave,
+      categoriaId: x.categoria_id, criadoEm: x.criado_em, entrou: x.entrou
+    }))
+    return true
   }
 
-  const novosMembros = (p: Periodo) => Math.round(NOVOS_MEMBROS_30D * FRACAO[p])
+  const doPeriodo = <T extends { criadoEm: string }>(lista: T[], p: Periodo) =>
+    lista.filter(x => new Date(x.criadoEm).getTime() >= desde(p))
 
-  return { leads, cliquesPorOrigem, cliquesPorCategoria, leadsDoPeriodo, novosMembros }
+  function contar(lista: Clique[], chave: (c: Clique) => string) {
+    const mapa = new Map<string, number>()
+    for (const c of lista) mapa.set(chave(c), (mapa.get(chave(c)) ?? 0) + 1)
+    return [...mapa.entries()].sort((a, b) => b[1] - a[1])
+  }
+
+  const cliquesPorOrigem = (p: Periodo) =>
+    contar(doPeriodo(cliques.value, p), c => c.origem)
+      .map(([origem, valor]) => ({ chave: origem, rotulo: ORIGENS[origem] ?? origem, valor }))
+
+  const cliquesPorCategoria = (p: Periodo) =>
+    contar(doPeriodo(cliques.value, p), c => c.categoriaId ?? '')
+      .map(([id, valor]) => ({ id, valor }))
+
+  const leadsDoPeriodo = (p: Periodo) => doPeriodo(leads.value, p)
+
+  // Depende do aviso de "participante entrou" da UazAPI. null = ainda não disponível
+  const novosMembros = (_p: Periodo): number | null => null
+
+  return { leads, carregar, cliquesPorOrigem, cliquesPorCategoria, leadsDoPeriodo, novosMembros }
 }

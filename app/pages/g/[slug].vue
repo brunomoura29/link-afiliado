@@ -1,23 +1,31 @@
 <script setup lang="ts">
+import type { Plataforma } from '#shared/utils/plataforma'
+
 // Página pública de entrada no grupo (link que o cliente divulga nas redes).
-// Slugs de exemplo: "casa-cozinha" e "lotado".
+// Dados: server/api/publico/entrada. O botão é um link para /g/<slug>/entrar, que
+// registra o clique e manda para o convite do grupo com vaga.
 const rota = useRoute()
 const slug = String(rota.params.slug)
-const origem = computed(() => String(rota.query.src ?? 'direto'))
-const toast = useToast()
+const origem = computed(() => String(rota.query.src ?? '').toLowerCase())
 
-const { data: grupo } = await useAsyncData(`grupo-${slug}`, async () => buscarGrupoExemplo(slug))
-if (import.meta.server && !grupo.value) setResponseStatus(useRequestEvent()!, 404)
+const { data: grupo, error } = await useFetch(`/api/publico/entrada/${slug}`, { key: `entrada-${slug}` })
+if (import.meta.server && error.value) setResponseStatus(useRequestEvent()!, 404)
 
 useSeoMeta({
   title: () => grupo.value ? `${grupo.value.nome} · Grupo de ofertas no WhatsApp` : 'Grupo não encontrado',
-  description: () => grupo.value?.descricao,
+  description: () => grupo.value?.descricao || undefined,
   ogTitle: () => grupo.value ? `${grupo.value.emoji} ${grupo.value.nome}` : undefined,
-  ogDescription: () => grupo.value ? `${grupo.value.descricao} Entre grátis no grupo do WhatsApp.` : undefined,
+  ogDescription: () => grupo.value ? `${grupo.value.descricao ? `${grupo.value.descricao} ` : ''}Entre grátis no grupo do WhatsApp.` : undefined,
   ogType: 'website',
   twitterCard: 'summary_large_image'
   // TODO: ogImage gerada por grupo (imagem com nome, emoji e nº de membros)
 })
+
+const linkEntrar = computed(() => `/g/${slug}/entrar${origem.value ? `?src=${encodeURIComponent(origem.value)}` : ''}`)
+
+// Cor estável da miniatura enquanto a foto não carrega
+const matizDo = (id: string) => [...id].reduce((s, c) => (s * 31 + c.charCodeAt(0)) % 360, 7)
+const ofertas = computed(() => (grupo.value?.ofertas ?? []).map(o => ({ ...o, plataforma: o.plataforma as Plataforma, matiz: matizDo(o.id) })))
 
 const BENEFICIOS = [
   { icone: 'mensagem', titulo: 'Só ofertas, sem conversa', texto: 'Ninguém manda mensagem no grupo além das promoções.' },
@@ -28,15 +36,8 @@ const BENEFICIOS = [
 const CORES_AVATAR = ['bg-shopee', 'bg-ml-blue', 'bg-status-aprovada', 'bg-fg', 'bg-muted']
 const INICIAIS = ['M', 'J', 'C', 'R', 'A']
 
+// O link é normal (funciona sem JS); aqui só mostra "abrindo…" depois do toque
 const abrindo = ref(false)
-async function entrar() {
-  if (!grupo.value?.convite) return
-  abrindo.value = true
-  // TODO: registrar clique (categoria, grupo, origem) e redirecionar pelo servidor para o convite atual
-  await new Promise(r => setTimeout(r, 700))
-  abrindo.value = false
-  toast.info('Prévia', `Aqui abriria o convite do grupo no WhatsApp (origem: ${origem.value}).`)
-}
 </script>
 
 <template>
@@ -63,8 +64,8 @@ async function entrar() {
         </span>
         <p class="animate-fade-up text-label font-semibold text-muted [animation-delay:80ms]">Grupo de ofertas no WhatsApp</p>
         <h1 class="mt-1 animate-fade-up text-[28px] font-semibold leading-9 tracking-tight [animation-delay:140ms]">{{ grupo.nome }}</h1>
-        <p class="mt-1 animate-fade-up text-label text-muted [animation-delay:180ms]">por {{ grupo.dono }}</p>
-        <p class="mt-4 animate-fade-up [animation-delay:220ms]">{{ grupo.descricao }}</p>
+        <p v-if="grupo.dono" class="mt-1 animate-fade-up text-label text-muted [animation-delay:180ms]">por {{ grupo.dono }}</p>
+        <p v-if="grupo.descricao" class="mt-4 animate-fade-up [animation-delay:220ms]">{{ grupo.descricao }}</p>
       </section>
 
       <!-- Números -->
@@ -78,12 +79,18 @@ async function entrar() {
               :class="CORES_AVATAR[i]"
             >{{ ini }}</span>
           </div>
-          <p class="font-semibold"><UiContador :valor="grupo.membros" /></p>
-          <p class="text-[12px] text-muted">membros</p>
+          <template v-if="grupo.membros">
+            <p class="font-semibold"><UiContador :valor="grupo.membros" /></p>
+            <p class="text-[12px] text-muted">membros</p>
+          </template>
+          <template v-else>
+            <p class="font-semibold">Novo</p>
+            <p class="text-[12px] text-muted">grupo</p>
+          </template>
         </div>
         <div class="flex flex-col items-center justify-end gap-1 px-2">
-          <p class="text-title">~{{ grupo.ofertasPorDia }}</p>
-          <p class="text-[12px] text-muted">ofertas/dia</p>
+          <p class="text-title">{{ grupo.ofertasPorDia ? `~${grupo.ofertasPorDia}` : 'Todo dia' }}</p>
+          <p class="text-[12px] text-muted">{{ grupo.ofertasPorDia ? 'ofertas/dia' : 'novas ofertas' }}</p>
         </div>
         <div class="flex flex-col items-center justify-end gap-1 px-2">
           <div class="flex gap-1">
@@ -95,12 +102,12 @@ async function entrar() {
       </section>
 
       <!-- Ofertas recentes -->
-      <section class="mt-10">
-        <h2 v-reveal class="mb-3 font-semibold">Ofertas que saíram hoje</h2>
+      <section v-if="ofertas.length" class="mt-10">
+        <h2 v-reveal class="mb-3 font-semibold">Ofertas recentes</h2>
         <div class="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
           <div
-            v-for="(o, i) in grupo.ofertas"
-            :key="o.titulo"
+            v-for="(o, i) in ofertas"
+            :key="o.id"
             v-reveal="i * 80"
             class="w-40 shrink-0 snap-start"
           >
@@ -126,19 +133,26 @@ async function entrar() {
     <!-- Chamada fixa -->
     <div class="fixed inset-x-0 bottom-0 z-30">
       <div class="mx-auto max-w-md bg-gradient-to-t from-bg via-bg to-bg/0 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-10">
-        <template v-if="grupo.convite">
+        <template v-if="grupo.situacao === 'aberto'">
           <div class="relative">
             <span v-if="!abrindo" aria-hidden="true" class="chamar absolute inset-0 rounded bg-whatsapp" />
-            <UiBotao variante="whatsapp" tamanho="lg" bloco :carregando="abrindo" class="relative" @click="entrar">
-              <UiIcone nome="usuarios" :tamanho="18" /> Entrar no grupo
-              <template #carregando>Abrindo o WhatsApp…</template>
-            </UiBotao>
+            <a
+              :href="linkEntrar"
+              class="relative flex h-14 w-full items-center justify-center gap-2 rounded bg-whatsapp px-6 font-semibold text-[#0b3d1f] transition-transform active:scale-[.97]"
+              @click="abrindo = true"
+            >
+              <UiSpinner v-if="abrindo" />
+              <UiIcone v-else nome="usuarios" :tamanho="18" />
+              {{ abrindo ? 'Abrindo o WhatsApp…' : 'Entrar no grupo' }}
+            </a>
           </div>
           <p class="mt-2 text-center text-[12px] text-muted">Grátis · abre direto no WhatsApp</p>
         </template>
         <template v-else>
-          <UiBotao tamanho="lg" bloco disabled>Grupo lotado</UiBotao>
-          <p class="mt-2 text-center text-label text-muted">Um novo grupo abre em breve. Volte por este mesmo link.</p>
+          <UiBotao tamanho="lg" bloco disabled>{{ grupo.situacao === 'lotado' ? 'Grupo lotado' : 'Grupo abre em breve' }}</UiBotao>
+          <p class="mt-2 text-center text-label text-muted">
+            {{ grupo.situacao === 'lotado' ? 'Um novo grupo abre em breve.' : 'Estamos preparando o grupo.' }} Volte por este mesmo link.
+          </p>
         </template>
       </div>
     </div>
