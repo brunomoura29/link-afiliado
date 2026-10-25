@@ -311,8 +311,10 @@ próxima (ver checklist de aceite no fim).
   `POST /api/whatsapp/conectar` cria a instância se faltar e **não chama
   connect se a instância já estiver conectada** (reconectaria a sessão).
   Prazo na tela: 3 min, conferindo o status a cada 3 s.
-- Sucesso do pareamento ainda **não testado de ponta a ponta** (falta instância
-  livre: plano com 2 vagas e 4 instâncias). Testar só em instância livre.
+- **Pareamento por QR validado de ponta a ponta** (25/10/2026, pela tela, na
+  instância `theus`, agora com o número pessoal do usuário). Código pelo número
+  usa o mesmo caminho, ainda sem teste prático. Plano da UazAPI: 2 vagas, 4
+  instâncias existentes (não dá para criar novas).
 - Nunca enviar em sequência imediata — sempre via fila (próximo item).
 
 ### 7. Fila de envio (cron)
