@@ -78,7 +78,7 @@ const LINKS = computed(() => {
       <span class="min-w-0 flex-1">
         <span class="block font-semibold">{{ whatsappConectado ? 'WhatsApp conectado' : 'WhatsApp desconectado' }}</span>
         <span class="block truncate text-label text-muted">
-          {{ whatsappConectado ? `${whatsapp.numero} · enviando normalmente` : 'Conecte para voltar a enviar' }}
+          {{ whatsappConectado ? `${whatsapp.numero} · pronto para enviar` : 'Conecte para voltar a enviar' }}
         </span>
       </span>
       <UiIcone nome="seta-direita" :tamanho="18" class="text-muted transition-transform duration-300 ease-spring group-hover:translate-x-1" />

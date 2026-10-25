@@ -1,16 +1,21 @@
-// Estado da conexão do WhatsApp do cliente. Por enquanto simulado.
-// TODO (UazAPI, pedir a doc ao usuário): criar instância, gerar QR, gerar código
-// de pareamento pelo número, consultar status, desconectar, webhook de status.
+// Conexão do WhatsApp do cliente (UazAPI, pelo servidor).
+// Real: status (GET /api/whatsapp/status). Ainda simulado até chegar a doc da UazAPI:
+// conectar por QR / código pelo número e desconectar.
 
 export type StatusWhatsapp = 'desconectado' | 'gerando' | 'aguardando' | 'conectando' | 'conectado'
 export type ModoConexao = 'codigo' | 'qr'
 
 interface EstadoWhatsapp {
   status: StatusWhatsapp
+  carregado: boolean
+  semInstancia: boolean // ainda não tem instância na UazAPI (criada ao conectar)
+  erro: string | null
   modo: ModoConexao
-  numero: string
+  numero: string // formatado: +55 (85) 9438-7766
   nomePerfil: string
+  foto: string | null
   conectadoEm: string | null // ISO
+  motivoDesconexao: string | null
   codigo: string // código de pareamento (modo "codigo")
   semente: number // muda a cada novo QR
   expiraEm: number | null // timestamp do vencimento do código/QR
@@ -30,12 +35,18 @@ function gerarCodigo() {
 const espera = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 export function useWhatsapp() {
+  const toast = useToast()
   const estado = useState<EstadoWhatsapp>('whatsapp', () => ({
-    status: 'conectado',
+    status: 'desconectado',
+    carregado: false,
+    semInstancia: false,
+    erro: null,
     modo: 'codigo',
-    numero: '+55 (11) 98765-4821',
-    nomePerfil: 'Loja da Ana · Ofertas',
-    conectadoEm: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    numero: '',
+    nomePerfil: '',
+    foto: null,
+    conectadoEm: null,
+    motivoDesconexao: null,
     codigo: '',
     semente: 1,
     expiraEm: null,
@@ -43,6 +54,36 @@ export function useWhatsapp() {
   }))
 
   const conectado = computed(() => estado.value.status === 'conectado')
+
+  // Lê o status na UazAPI (pelo servidor)
+  async function carregarStatus() {
+    const e = estado.value
+    try {
+      const r = await $fetch('/api/whatsapp/status', { headers: useRequestHeaders(['cookie']) })
+      e.carregado = true
+      e.erro = null
+      e.semInstancia = r.situacao === 'sem_instancia'
+      if (r.situacao !== 'ok') {
+        if (r.situacao === 'instancia_invalida') e.erro = r.mensagem
+        // Durante o fluxo de conexão (simulado) não sobrescreve o que está na tela
+        if (!['gerando', 'aguardando', 'conectando'].includes(e.status)) e.status = 'desconectado'
+        return true
+      }
+      if (['gerando', 'aguardando', 'conectando'].includes(e.status) && r.status !== 'conectado') return true
+      e.status = r.status as StatusWhatsapp
+      e.numero = formatarNumeroWhatsapp(r.numero)
+      e.nomePerfil = r.nomePerfil ?? ''
+      e.foto = r.foto ?? null
+      e.conectadoEm = r.conectadoEm ?? null
+      e.motivoDesconexao = r.motivoDesconexao ?? null
+    } catch {
+      e.carregado = true
+      e.erro = 'Não foi possível consultar o WhatsApp agora.'
+    }
+    return true
+  }
+
+  // ── Conexão (simulada até chegar a doc da UazAPI) ──
 
   async function gerar(modo: ModoConexao, numero?: string) {
     const e = estado.value
@@ -85,11 +126,11 @@ export function useWhatsapp() {
     estado.value.expiraEm = null
   }
 
+  // TODO: doc de desconectar da UazAPI. false = não feito (já avisou)
   async function desconectar() {
-    await espera(700)
-    estado.value.status = 'desconectado'
-    estado.value.conectadoEm = null
+    toast.info('Disponível em breve', 'Desconectar pelo app entra junto com a próxima parte da UazAPI.')
+    return false
   }
 
-  return { estado, conectado, gerar, renovar, simularLeitura, cancelar, desconectar }
+  return { estado, conectado, carregarStatus, gerar, renovar, simularLeitura, cancelar, desconectar }
 }

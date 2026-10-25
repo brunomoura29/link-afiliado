@@ -54,3 +54,11 @@ export function tempoRelativo(iso: string | null) {
   const d = Math.floor(h / 24)
   return d === 1 ? 'ontem' : `há ${d} dias`
 }
+
+// Número do WhatsApp (só dígitos, com DDI) → "+55 (85) 9438-7766"
+export function formatarNumeroWhatsapp(digitos: string | null | undefined) {
+  const d = (digitos ?? '').replace(/\D/g, '')
+  if (!d) return ''
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return `+55 ${formatarTelefone(d.slice(2))}`
+  return `+${d}`
+}

@@ -5,7 +5,8 @@ const { nome, email, iniciais, carregar, sair } = usePerfil()
 await useAsyncData('perfil', carregar)
 const { carregar: carregarGrupos } = useGrupos()
 await useAsyncData('categorias-grupos', carregarGrupos)
-const { conectado: whatsappConectado } = useWhatsapp()
+const { conectado: whatsappConectado, carregarStatus } = useWhatsapp()
+await useAsyncData('whatsapp-status', carregarStatus)
 
 const ITENS = [
   { to: '/painel', rotulo: 'Início', icone: 'casa' },

@@ -293,6 +293,16 @@ próxima (ver checklist de aceite no fim).
   cliente. Status da UazAPI: disconnected | connecting | connected | hibernated.
   **429 = limite de instâncias do plano** (`max_instances`): cada cliente
   consome 1 instância → o plano da UazAPI precisa crescer com os clientes.
+- **Status (implementado)** — `GET /instance/status` com header `token` (da
+  instância). `GET /api/whatsapp/status` lê, espelha em `whatsapp_conexoes`
+  (connected→conectado, connecting→aguardando, resto→desconectado) e devolve
+  nome do perfil, número, foto, motivo da última desconexão; QR/paircode só
+  enquanto conectando. **Na prática `status.jid` vem como texto**
+  (`"5585…:48@s.whatsapp.net"`), não objeto como na doc — tratar os dois.
+  Token inválido → 401 "instance info not found".
+- **Instância de teste do usuário: `theus`** (ligada à conta dele à mão). Ela é
+  usada por OUTRO sistema dele (`systemName: ecommerceBi`): só leitura. Antes
+  de desconectar, trocar webhook ou enviar mensagens por ela, **perguntar**.
 - Nunca enviar em sequência imediata — sempre via fila (próximo item).
 
 ### 7. Fila de envio (cron)

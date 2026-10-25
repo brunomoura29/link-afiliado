@@ -6,7 +6,9 @@ useHead({ title: 'WhatsApp · LinkAfiliado' })
 
 const toast = useToast()
 const { disparar } = useConfete()
-const { estado, gerar, renovar, simularLeitura, cancelar, desconectar } = useWhatsapp()
+const { estado, carregarStatus, gerar, renovar, simularLeitura, cancelar, desconectar } = useWhatsapp()
+// Confere de novo ao abrir a tela (o layout já carregou uma vez)
+onMounted(() => carregarStatus())
 const { grupos } = useGrupos()
 const { ofertas, carregar: carregarOfertas } = useOfertas()
 await useAsyncData('ofertas', carregarOfertas)
@@ -73,18 +75,18 @@ const confirmar = ref(false)
 const desconectando = ref(false)
 async function confirmarDesconexao() {
   desconectando.value = true
-  await desconectar()
+  const feito = await desconectar()
   desconectando.value = false
   confirmar.value = false
-  toast.info('WhatsApp desconectado', 'Os envios ficam pausados até você conectar de novo.')
+  if (feito) toast.info('WhatsApp desconectado', 'Os envios ficam pausados até você conectar de novo.')
 }
 
 const conectadoHa = computed(() => {
   if (!estado.value.conectadoEm) return ''
   const dias = Math.floor((Date.now() - new Date(estado.value.conectadoEm).getTime()) / 86_400_000)
-  return dias === 0 ? 'hoje' : dias === 1 ? 'há 1 dia' : `há ${dias} dias`
+  return dias === 0 ? 'desde hoje' : dias === 1 ? 'há 1 dia' : `há ${dias} dias`
 })
-const iniciais = computed(() => estado.value.nomePerfil.split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join('').toUpperCase())
+const iniciais = computed(() => (estado.value.nomePerfil || 'W').split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join('').toUpperCase())
 
 const PASSOS = computed(() => modo.value === 'codigo'
   ? [
@@ -127,15 +129,16 @@ const MODOS = [
             <div class="flex items-center gap-4">
               <span class="relative flex size-14 shrink-0 items-center justify-center rounded-full bg-whatsapp text-[18px] font-semibold text-[#0b3d1f]">
                 <span class="absolute inset-0 animate-ring-out rounded-full bg-whatsapp" />
-                <span class="relative">{{ iniciais }}</span>
+                <img v-if="estado.foto" :src="estado.foto" alt="" class="relative size-14 rounded-full object-cover">
+                <span v-else class="relative">{{ iniciais }}</span>
               </span>
               <div class="min-w-0">
-                <p class="truncate font-semibold">{{ estado.nomePerfil }}</p>
+                <p class="truncate font-semibold">{{ estado.nomePerfil || 'WhatsApp' }}</p>
                 <p class="truncate text-muted">{{ estado.numero }}</p>
                 <p class="mt-1 flex items-center gap-1.5 text-label">
                   <span class="size-2 rounded-full bg-whatsapp" />
                   <span class="font-semibold">Conectado</span>
-                  <span class="text-muted">· {{ conectadoHa }}</span>
+                  <span v-if="conectadoHa" class="text-muted">· {{ conectadoHa }}</span>
                 </p>
               </div>
             </div>
@@ -175,6 +178,8 @@ const MODOS = [
               <div>
                 <p class="text-title">Conecte seu WhatsApp</p>
                 <p class="mt-0.5 text-muted">Sem conexão, as ofertas ficam na fila e nada é enviado.</p>
+                <p v-if="estado.motivoDesconexao" class="mt-1 text-[12px] text-muted">Último motivo: {{ estado.motivoDesconexao }}</p>
+                <p v-if="estado.erro" class="mt-1 text-[12px] text-status-rejeitada">{{ estado.erro }}</p>
               </div>
             </div>
 

@@ -68,6 +68,38 @@ export async function criarInstancia(nome: string, ownerId: string) {
   return { token, id: r.instance?.id ?? null, nome: r.instance?.name ?? r.name ?? nome, aviso: r.info ?? null }
 }
 
+interface RespostaStatus {
+  instance?: {
+    status?: StatusInstancia
+    profileName?: string
+    profilePicUrl?: string
+    qrcode?: string
+    paircode?: string
+    owner?: string
+    lastDisconnect?: string
+    lastDisconnectReason?: string
+  }
+  // A doc diz objeto ({ user: "5511…" }), mas na prática vem texto ("5511…:48@s.whatsapp.net")
+  status?: { connected?: boolean, loggedIn?: boolean, jid?: string | { user?: string } | null }
+}
+
+// GET /instance/status (header "token" da instância)
+export async function statusInstancia(token: string) {
+  const r = await chamar<RespostaStatus>('/instance/status', { method: 'GET', headers: { token } })
+  const jid = r.status?.jid
+  const numero = (typeof jid === 'string' ? jid.split(/[:@]/)[0] : jid?.user) || r.instance?.owner || null
+  return {
+    status: r.instance?.status ?? (r.status?.connected ? 'connected' : 'disconnected') as StatusInstancia,
+    conectado: !!(r.status?.connected && r.status?.loggedIn),
+    numero: numero?.replace(/\D/g, '') || null,
+    nomePerfil: r.instance?.profileName || null,
+    foto: r.instance?.profilePicUrl || null,
+    qrcode: r.instance?.qrcode || null,
+    paircode: r.instance?.paircode || null,
+    motivoDesconexao: r.instance?.lastDisconnectReason || null
+  }
+}
+
 // Instância do cliente: devolve a existente ou cria na primeira vez
 export async function garantirInstancia(event: H3Event, ownerId: string) {
   const admin = serverSupabaseServiceRole(event)
