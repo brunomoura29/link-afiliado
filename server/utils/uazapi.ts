@@ -3,7 +3,8 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 
 // Cliente da UazAPI (só no servidor). Doc: fornecida pelo usuário sob demanda — não
 // inventar rotas/campos. Implementado: instância (create/status/connect) e grupos
-// (list/invitelink/create/updateAnnounce/updateLocked/updateName/updateDescription/updateImage).
+// (list/invitelink/create/updateAnnounce/updateLocked/updateName/updateDescription/updateImage)
+// e envio (send/media, send/text).
 // O token de cada instância fica em whatsapp_credenciais (RLS sem políticas) e nunca
 // vai para o navegador.
 
@@ -39,13 +40,15 @@ async function chamar<T>(caminho: string, opcoes: { method: 'GET' | 'POST' | 'DE
   try {
     return await $fetch<T>(`${url}${caminho}`, { ...opcoes, timeout: 20_000 })
   } catch (e) {
-    const erro = e as { statusCode?: number, status?: number, data?: { max_instances?: number, current_instances?: number } }
+    const erro = e as { statusCode?: number, status?: number, data?: { max_instances?: number, current_instances?: number, provider_message_ptbr?: string, message_ptbr?: string } }
     const status = erro.statusCode ?? erro.status ?? 500
     // 429 traz o limite do plano: {"max_instances":2,"current_instances":4,...}
     if (status === 429 && erro.data?.max_instances != null) {
       throw new ErroUazapi(429, `Limite de instâncias do WhatsApp atingido: o plano da UazAPI permite ${erro.data.max_instances} e já existem ${erro.data.current_instances ?? 'várias'}.`)
     }
-    throw new ErroUazapi(status, MENSAGENS[status] ?? 'Não foi possível falar com a UazAPI agora.')
+    // Erro vindo do próprio WhatsApp (ex.: 463, conta com restrição temporária) já vem explicado
+    const doWhatsapp = erro.data?.provider_message_ptbr || erro.data?.message_ptbr
+    throw new ErroUazapi(status, doWhatsapp || MENSAGENS[status] || 'Não foi possível falar com a UazAPI agora.')
   }
 }
 
@@ -234,6 +237,28 @@ export async function definirDescricao(token: string, jid: string, descricao: st
 export async function definirImagem(token: string, jid: string, imagem: string) {
   const r = await chamar<{ group?: GrupoUazapi }>('/group/updateImage', { method: 'POST', headers: { token }, body: { groupjid: jid, image: imagem } })
   return r.group?.image_preview_url || r.group?.image_url || null
+}
+
+interface RespostaEnvio { messageid?: string, id?: string }
+
+// POST /send/media — foto do produto com a legenda. number = JID do grupo (…@g.us).
+export async function enviarImagem(token: string, jid: string, imagemUrl: string, legenda: string) {
+  const r = await chamar<RespostaEnvio>('/send/media', {
+    method: 'POST',
+    headers: { token },
+    body: { number: jid, type: 'image', file: imagemUrl, text: legenda }
+  })
+  return r.messageid || r.id || null
+}
+
+// POST /send/text — só a legenda, com prévia do link (oferta sem foto ou foto recusada)
+export async function enviarTexto(token: string, jid: string, texto: string) {
+  const r = await chamar<RespostaEnvio>('/send/text', {
+    method: 'POST',
+    headers: { token },
+    body: { number: jid, text: texto, linkPreview: true }
+  })
+  return r.messageid || r.id || null
 }
 
 // Instância do cliente: devolve a existente ou cria na primeira vez

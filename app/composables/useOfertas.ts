@@ -1,13 +1,14 @@
 // Ofertas recebidas (formulário público ou painel) e o andamento de cada uma.
 // Supabase: ofertas + envios. O status muda no servidor: leitura do produto (pendente →
-// aprovada/rejeitada) e fila de envio (aprovada → enviada) — próximas fases.
+// aprovada/rejeitada) e fila de envio (aprovada → enviada, server/utils/filaEnvios.ts).
 import type { Plataforma, StatusPostagem } from '#shared/utils/plataforma'
 import type { Tables } from '~/types/database.types'
 
 export interface Envio {
   grupo: string
-  status: 'enviado' | 'na_fila' | 'erro'
+  status: 'enviado' | 'na_fila' | 'enviando' | 'erro'
   quando: string | null
+  erro: string | null // motivo, quando falhou ou não foi enviado
 }
 
 export interface Oferta {
@@ -30,7 +31,7 @@ export interface Oferta {
   envios: Envio[]
 }
 
-type LinhaOferta = Tables<'ofertas'> & { envios: Pick<Tables<'envios'>, 'grupo_nome' | 'status' | 'enviado_em'>[] }
+type LinhaOferta = Tables<'ofertas'> & { envios: Pick<Tables<'envios'>, 'grupo_nome' | 'status' | 'enviado_em' | 'erro'>[] }
 
 // Cor estável a partir do id (a miniatura não muda a cada recarga)
 const matizDo = (id: string) => [...id].reduce((s, c) => (s * 31 + c.charCodeAt(0)) % 360, 7)
@@ -52,10 +53,10 @@ const daLinha = (o: LinhaOferta): Oferta => ({
   origem: o.origem_nome,
   criadaEm: o.criado_em,
   matiz: matizDo(o.id),
-  envios: (o.envios ?? []).map(e => ({ grupo: e.grupo_nome, status: e.status as Envio['status'], quando: e.enviado_em }))
+  envios: (o.envios ?? []).map(e => ({ grupo: e.grupo_nome, status: e.status as Envio['status'], quando: e.enviado_em, erro: e.erro }))
 })
 
-const COLUNAS = '*, envios(grupo_nome, status, enviado_em)'
+const COLUNAS = '*, envios(grupo_nome, status, enviado_em, erro)'
 
 export function useOfertas() {
   const supabase = useSupabaseClient()
@@ -119,9 +120,22 @@ export function useOfertas() {
   }
 
   // Depende da UazAPI. false = não disponível ainda (já avisou)
-  async function enviarAgora(_o: Oferta): Promise<boolean> {
-    toast.info('Disponível em breve', 'O envio funciona quando o WhatsApp for ligado pela UazAPI.')
-    return false
+  // Passa a oferta na frente da fila: o 1º grupo recebe na hora, os outros seguem o intervalo.
+  // null = não enviou (já avisou com toast)
+  async function enviarAgora(o: Oferta): Promise<{ enviados: number, naFila: number } | null> {
+    try {
+      const r = await $fetch(`/api/ofertas/${o.id}/enviar-agora`, { method: 'POST' })
+      await carregar()
+      if (r.resultado === 'erro') {
+        toast.erro('Não foi possível enviar', r.erro ?? 'Tente de novo em instantes.')
+        return null
+      }
+      return r
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      toast.erro('Não foi possível enviar agora', msg ?? 'Verifique sua internet e tente de novo.')
+      return null
+    }
   }
 
   return { ofertas, carregar, adicionar, tentarNovamente, relerParadas, excluir, novaLegenda, enviarAgora }

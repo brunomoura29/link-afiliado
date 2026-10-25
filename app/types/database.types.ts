@@ -168,9 +168,12 @@ export type Database = {
           erro: string | null
           grupo_nome: string
           id: string
+          mensagem_id: string | null
           oferta_id: string
+          pego_em: string | null
           owner_id: string
           status: string
+          tentativas: number
         }
         Insert: {
           agendado_para?: string | null
@@ -180,9 +183,12 @@ export type Database = {
           erro?: string | null
           grupo_nome?: string
           id?: string
+          mensagem_id?: string | null
           oferta_id: string
+          pego_em?: string | null
           owner_id: string
           status?: string
+          tentativas?: number
         }
         Update: {
           agendado_para?: string | null
@@ -192,9 +198,12 @@ export type Database = {
           erro?: string | null
           grupo_nome?: string
           id?: string
+          mensagem_id?: string | null
           oferta_id?: string
+          pego_em?: string | null
           owner_id?: string
           status?: string
+          tentativas?: number
         }
         Relationships: [
           {
@@ -407,6 +416,7 @@ export type Database = {
           conectado_em: string | null
           nome_perfil: string | null
           numero: string | null
+          proximo_envio_em: string | null
           owner_id: string
           status: string
         }
@@ -415,6 +425,7 @@ export type Database = {
           conectado_em?: string | null
           nome_perfil?: string | null
           numero?: string | null
+          proximo_envio_em?: string | null
           owner_id: string
           status?: string
         }
@@ -423,6 +434,7 @@ export type Database = {
           conectado_em?: string | null
           nome_perfil?: string | null
           numero?: string | null
+          proximo_envio_em?: string | null
           owner_id?: string
           status?: string
         }

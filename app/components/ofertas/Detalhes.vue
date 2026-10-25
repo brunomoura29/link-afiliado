@@ -41,10 +41,13 @@ const processando = ref<'enviar' | 'tentar' | 'excluir' | null>(null)
 const falhou = () => toast.erro('Não foi possível concluir', 'Verifique sua internet e tente de novo.')
 async function enviar() {
   processando.value = 'enviar'
-  const enviou = await enviarAgora(props.oferta)
+  const r = await enviarAgora(props.oferta)
   processando.value = null
-  if (!enviou) return
-  toast.whatsapp('Oferta enviada', `Publicada em ${props.oferta.envios.length} grupos.`)
+  if (!r) return
+  toast.whatsapp(
+    r.enviados ? 'Oferta enviada' : 'Oferta na frente da fila',
+    r.naFila ? `Já foi para ${r.enviados} grupo(s). Os outros ${r.naFila} recebem no intervalo normal, para proteger o número.` : `Publicada em ${r.enviados} grupo(s).`
+  )
 }
 async function tentar() {
   processando.value = 'tentar'
@@ -73,6 +76,7 @@ async function confirmarExclusao() {
 const ICONE_ENVIO = {
   enviado: { icone: 'check', classe: 'bg-whatsapp text-[#0b3d1f]' },
   na_fila: { icone: 'relogio', classe: 'bg-surface text-muted' },
+  enviando: { icone: 'enviar', classe: 'bg-surface text-muted' },
   erro: { icone: 'alerta', classe: 'bg-status-rejeitada text-white' }
 } as const
 </script>
@@ -190,7 +194,7 @@ const ICONE_ENVIO = {
           <span class="min-w-0 flex-1">
             <span class="block truncate text-label font-semibold">{{ e.grupo }}</span>
             <span class="block text-[12px]" :class="e.status === 'erro' ? 'text-status-rejeitada' : 'text-muted'">
-              {{ e.status === 'enviado' ? `Enviada ${tempoRelativo(e.quando)}` : e.status === 'na_fila' ? 'Na fila, aguardando o intervalo' : 'Falhou: o número pode ter saído do grupo' }}
+              {{ e.status === 'enviado' ? `Enviada ${tempoRelativo(e.quando)}` : e.status === 'na_fila' ? 'Na fila, aguardando o intervalo' : e.status === 'enviando' ? 'Enviando…' : e.erro ?? 'Não foi enviada' }}
             </span>
           </span>
         </li>

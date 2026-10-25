@@ -40,9 +40,10 @@ export async function processarOferta(event: H3Event, ofertaId: string) {
   }
 }
 
-// Um envio "na fila" por grupo da categoria que recebe ofertas.
-// (Horário e intervalo de cada envio ficam por conta da fila — próxima fase.)
-async function colocarNaFila(event: H3Event, ownerId: string, ofertaId: string, categoriaId: string | null) {
+// Um envio "na fila" por grupo da categoria que recebe ofertas (horário e intervalo ficam
+// por conta da fila, server/utils/filaEnvios.ts). Grupo que já recebeu (ou está recebendo)
+// esta oferta fica de fora; envios que falharam voltam para a fila.
+export async function colocarNaFila(event: H3Event, ownerId: string, ofertaId: string, categoriaId: string | null) {
   if (!categoriaId) return
   const admin = serverSupabaseServiceRole(event)
   // A categoria da oferta + as categorias "geral" (recebem as ofertas de todas)
@@ -55,9 +56,12 @@ async function colocarNaFila(event: H3Event, ownerId: string, ofertaId: string, 
     .in('categoria_id', categorias)
     .eq('recebe_ofertas', true)
     .eq('pode_enviar', true)
-  await admin.from('envios').delete().eq('oferta_id', ofertaId).eq('status', 'na_fila')
-  if (grupos?.length) {
-    await admin.from('envios').insert(grupos.map(g => ({ owner_id: ownerId, oferta_id: ofertaId, destino_id: g.id, grupo_nome: g.nome })))
+  await admin.from('envios').delete().eq('oferta_id', ofertaId).in('status', ['na_fila', 'erro'])
+  const { data: jaForam } = await admin.from('envios').select('destino_id').eq('oferta_id', ofertaId).in('status', ['enviado', 'enviando'])
+  const pular = new Set((jaForam ?? []).map(e => e.destino_id))
+  const novos = (grupos ?? []).filter(g => !pular.has(g.id))
+  if (novos.length) {
+    await admin.from('envios').insert(novos.map(g => ({ owner_id: ownerId, oferta_id: ofertaId, destino_id: g.id, grupo_nome: g.nome })))
   }
 }
 
