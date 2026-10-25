@@ -12,7 +12,7 @@ const { disparar } = useConfete()
 const { conectado } = useWhatsapp()
 const {
   categorias, grupos, sincronizar, definirCategoria, definirOfertas, buscarConvite, novoConvite,
-  proximoNomeGrupo, criarGrupo
+  proximoNomeGrupo, criarGrupo, definirSoAdmins, editarGrupo, atualizarDoWhatsapp
 } = useGrupos()
 
 const categoriaDe = (g: Grupo) => categorias.value.find(c => c.id === g.categoriaId)
@@ -85,6 +85,83 @@ async function gerarConvite() {
   gerandoConvite.value = false
   confirmarConvite.value = false
   if (convite) toast.sucesso('Novo convite gerado', 'O link de entrada da categoria continua o mesmo.')
+}
+
+// Nome, descrição e foto: mudam o grupo de verdade no WhatsApp
+const edicao = reactive({ nome: '', descricao: '' })
+const erroEdicao = reactive({ nome: '', descricao: '' })
+function preencherEdicao(g: Grupo | null) {
+  edicao.nome = g?.nome ?? ''
+  edicao.descricao = g?.descricao ?? ''
+  erroEdicao.nome = erroEdicao.descricao = ''
+}
+watch(selecionado, preencherEdicao)
+watch(() => edicao.nome, () => (erroEdicao.nome = ''))
+const edicaoMudou = computed(() => !!selecionado.value
+  && (edicao.nome.trim() !== selecionado.value.nome || edicao.descricao.trim() !== selecionado.value.descricao))
+const salvandoEdicao = ref(false)
+async function salvarEdicao() {
+  const g = selecionado.value
+  if (!g) return
+  const nome = edicao.nome.trim()
+  if (!nome) return (erroEdicao.nome = 'Dê um nome para o grupo')
+  if (nome !== g.nome && nome.length > 25) return (erroEdicao.nome = 'O WhatsApp aceita até 25 letras ao renomear')
+  const mudancas = {
+    ...(nome !== g.nome ? { nome } : {}),
+    ...(edicao.descricao.trim() !== g.descricao ? { descricao: edicao.descricao.trim() } : {})
+  }
+  salvandoEdicao.value = true
+  const ok = await editarGrupo(g, mudancas)
+  salvandoEdicao.value = false
+  if (ok) toast.sucesso('Grupo atualizado no WhatsApp', g.nome)
+}
+
+const inputFoto = ref<HTMLInputElement>()
+const mudandoFoto = ref(false)
+async function trocarFoto(e: Event) {
+  const g = selecionado.value
+  const arquivo = (e.target as HTMLInputElement).files?.[0]
+  ;(e.target as HTMLInputElement).value = '' // permite escolher o mesmo arquivo de novo
+  if (!g || !arquivo) return
+  let imagem
+  try {
+    imagem = await prepararFotoGrupo(arquivo)
+  } catch {
+    return toast.erro('Não deu para usar essa imagem', 'Escolha uma foto em JPG ou PNG.')
+  }
+  mudandoFoto.value = true
+  const ok = await editarGrupo(g, { imagem })
+  mudandoFoto.value = false
+  if (ok) toast.sucesso('Foto do grupo trocada', g.nome)
+}
+async function removerFoto() {
+  const g = selecionado.value
+  if (!g) return
+  mudandoFoto.value = true
+  const ok = await editarGrupo(g, { imagem: 'remove' })
+  mudandoFoto.value = false
+  if (ok) toast.sucesso('Foto do grupo removida', g.nome)
+}
+
+// Relê o grupo no WhatsApp (mudanças feitas pelo celular). O que estava sendo digitado é trocado.
+const atualizandoGrupo = ref(false)
+async function atualizarSelecionado() {
+  const g = selecionado.value
+  if (!g) return
+  atualizandoGrupo.value = true
+  if (await atualizarDoWhatsapp(g)) preencherEdicao(g)
+  atualizandoGrupo.value = false
+}
+
+// "Só admins enviam mensagens" muda o grupo de verdade no WhatsApp
+const mudandoSoAdmins = ref(false)
+async function mudarSoAdmins(ativo: boolean) {
+  const g = selecionado.value
+  if (!g) return
+  mudandoSoAdmins.value = true
+  const ok = await definirSoAdmins(g, ativo)
+  mudandoSoAdmins.value = false
+  if (ok) toast.sucesso(ativo ? 'Só admins enviam mensagens' : 'Todos podem enviar mensagens', g.nome)
 }
 
 const buscandoConvite = ref(false)
@@ -242,6 +319,7 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
     <!-- Detalhes do grupo -->
     <UiDialogo
       v-model="detalhesAberto"
+      :largura="selecionado?.admin ? 'ampla' : 'padrao'"
       :titulo="selecionado?.nome ?? ''"
       :descricao="selecionado ? `${selecionado.membros.toLocaleString('pt-BR')} de ${selecionado.capacidade.toLocaleString('pt-BR')} membros` : ''"
     >
@@ -258,55 +336,117 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
           </span>
         </p>
 
-        <UiSelecao v-model="categoriaSelecionada" rotulo="Categoria" :opcoes="opcoesCategoria" />
+        <!-- Em telas grandes: organização à esquerda, o que fica no WhatsApp à direita -->
+        <div class="flex flex-col gap-5" :class="selecionado.admin && 'lg:grid lg:grid-cols-2 lg:items-start lg:gap-8'">
+          <div class="flex flex-col gap-5">
+            <UiSelecao v-model="categoriaSelecionada" rotulo="Categoria" :opcoes="opcoesCategoria" />
 
-        <UiInterruptor
-          v-if="selecionado.categoriaId"
-          :model-value="selecionado.recebeOfertas"
-          rotulo="Enviar ofertas para este grupo"
-          descricao="Desligue para pausar só este grupo."
-          @update:model-value="definirOfertas(selecionado, $event)"
-        />
+            <UiInterruptor
+              v-if="selecionado.categoriaId"
+              :model-value="selecionado.recebeOfertas"
+              rotulo="Enviar ofertas para este grupo"
+              descricao="Desligue para pausar só este grupo."
+              @update:model-value="definirOfertas(selecionado, $event)"
+            />
 
-        <NuxtLink
-          v-if="selecionado.categoriaId"
-          :to="`/painel/categorias/${selecionado.categoriaId}`"
-          class="flex items-center justify-between gap-2 rounded border border-line p-3 text-label transition-colors hover:bg-surface"
-        >
-          <span>Ordem de entrada e link da categoria</span>
-          <UiIcone nome="seta-direita" :tamanho="16" class="text-muted" />
-        </NuxtLink>
+            <NuxtLink
+              v-if="selecionado.categoriaId"
+              :to="`/painel/categorias/${selecionado.categoriaId}`"
+              class="flex items-center justify-between gap-2 rounded border border-line p-3 text-label transition-colors hover:bg-surface"
+            >
+              <span>Ordem de entrada e link da categoria</span>
+              <UiIcone nome="seta-direita" :tamanho="16" class="text-muted" />
+            </NuxtLink>
 
-        <div v-if="selecionado.admin" class="flex flex-col gap-2">
-          <p>Convite direto do grupo</p>
-          <div class="flex items-center gap-1 rounded bg-surface p-1 pl-3">
-            <span class="min-w-0 flex-1 truncate font-mono text-label text-muted">{{ selecionado.convite?.replace('https://', '') ?? 'Sem convite ainda' }}</span>
-            <button v-if="selecionado.convite" type="button" :class="botaoIcone" aria-label="Copiar convite" @click="copiarConvite(selecionado.convite)">
-              <UiIcone :nome="copiado ? 'check' : 'copiar'" :tamanho="16" />
-            </button>
-            <UiBotao v-else tamanho="sm" variante="secundario" :carregando="buscandoConvite" :disabled="!conectado" @click="buscarConviteSelecionado">
-              Buscar
-              <template #carregando>Buscando…</template>
-            </UiBotao>
-          </div>
-          <Transition v-if="selecionado.convite" name="troca" mode="out-in">
-            <div v-if="confirmarConvite" key="c" class="flex flex-col gap-2 rounded border border-line p-3">
-              <p class="text-label">O convite atual para de funcionar. O link de entrada da categoria continua funcionando normalmente.</p>
-              <div class="flex gap-2">
-                <UiBotao tamanho="sm" variante="perigo" :carregando="gerandoConvite" @click="gerarConvite">
-                  Gerar novo
-                  <template #carregando>Gerando…</template>
+
+            <UiInterruptor
+              v-if="selecionado.admin"
+              :model-value="selecionado.soAdmins"
+              :disabled="mudandoSoAdmins || !conectado"
+              rotulo="Só admins enviam mensagens"
+              :descricao="mudandoSoAdmins ? 'Mudando no WhatsApp…' : 'Muda no grupo de verdade. Recomendado: só as ofertas.'"
+              @update:model-value="mudarSoAdmins"
+            />
+
+            <div v-if="selecionado.admin" class="flex flex-col gap-2">
+              <p>Convite direto do grupo</p>
+              <div class="flex items-center gap-1 rounded bg-surface p-1 pl-3">
+                <span class="min-w-0 flex-1 truncate font-mono text-label text-muted">{{ selecionado.convite?.replace('https://', '') ?? 'Sem convite ainda' }}</span>
+                <button v-if="selecionado.convite" type="button" :class="botaoIcone" aria-label="Copiar convite" @click="copiarConvite(selecionado.convite)">
+                  <UiIcone :nome="copiado ? 'check' : 'copiar'" :tamanho="16" />
+                </button>
+                <UiBotao v-else tamanho="sm" variante="secundario" :carregando="buscandoConvite" :disabled="!conectado" @click="buscarConviteSelecionado">
+                  Buscar
+                  <template #carregando>Buscando…</template>
                 </UiBotao>
-                <UiBotao tamanho="sm" variante="fantasma" :disabled="gerandoConvite" @click="confirmarConvite = false">Cancelar</UiBotao>
+              </div>
+              <Transition v-if="selecionado.convite" name="troca" mode="out-in">
+                <div v-if="confirmarConvite" key="c" class="flex flex-col gap-2 rounded border border-line p-3">
+                  <p class="text-label">O convite atual para de funcionar. O link de entrada da categoria continua funcionando normalmente.</p>
+                  <div class="flex gap-2">
+                    <UiBotao tamanho="sm" variante="perigo" :carregando="gerandoConvite" @click="gerarConvite">
+                      Gerar novo
+                      <template #carregando>Gerando…</template>
+                    </UiBotao>
+                    <UiBotao tamanho="sm" variante="fantasma" :disabled="gerandoConvite" @click="confirmarConvite = false">Cancelar</UiBotao>
+                  </div>
+                </div>
+                <button v-else key="b" type="button" class="self-start text-label font-semibold text-muted underline decoration-line underline-offset-4 hover:text-fg" @click="confirmarConvite = true">
+                  Gerar novo convite (se o atual vazou)
+                </button>
+              </Transition>
+            </div>
+          </div>
+          <!-- No WhatsApp: foto, nome e descrição (só admin) -->
+          <form v-if="selecionado.admin" class="flex flex-col gap-4 rounded border border-line p-4" novalidate @submit.prevent="salvarEdicao">
+            <div class="flex items-center gap-4">
+              <span class="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface text-muted">
+                <img v-if="selecionado.foto" :src="selecionado.foto" alt="Foto do grupo" class="size-16 object-cover">
+                <UiIcone v-else nome="usuarios" :tamanho="24" />
+                <span v-if="mudandoFoto" class="absolute inset-0 flex items-center justify-center bg-bg/70"><UiSpinner /></span>
+              </span>
+              <div class="flex flex-col items-start gap-1">
+                <input ref="inputFoto" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="trocarFoto">
+                <UiBotao tamanho="sm" variante="secundario" :disabled="mudandoFoto || !conectado" @click="inputFoto?.click()">
+                  {{ selecionado.foto ? 'Trocar foto' : 'Pôr foto' }}
+                </UiBotao>
+                <button
+                  v-if="selecionado.foto"
+                  type="button"
+                  class="text-label font-semibold text-muted underline decoration-line underline-offset-4 hover:text-fg disabled:opacity-40"
+                  :disabled="mudandoFoto || !conectado"
+                  @click="removerFoto"
+                >
+                  Remover foto
+                </button>
               </div>
             </div>
-            <button v-else key="b" type="button" class="self-start text-label font-semibold text-muted underline decoration-line underline-offset-4 hover:text-fg" @click="confirmarConvite = true">
-              Gerar novo convite (se o atual vazou)
-            </button>
-          </Transition>
+            <UiCampo v-model="edicao.nome" rotulo="Nome do grupo" :maxlength="100" :erro="erroEdicao.nome" />
+            <UiCampo
+              v-model="edicao.descricao"
+              rotulo="Descrição"
+              :linhas="3"
+              :maxlength="512"
+              :dica="`${edicao.descricao.length}/512 · aparece nos dados do grupo`"
+            />
+            <UiBotao
+              type="submit"
+              tamanho="sm"
+              class="self-start"
+              :disabled="!edicaoMudou || !conectado"
+              :carregando="salvandoEdicao"
+            >
+              Salvar no WhatsApp
+              <template #carregando>Salvando…</template>
+            </UiBotao>
+          </form>
         </div>
       </div>
       <template #acoes>
+        <UiBotao variante="fantasma" class="sm:mr-auto" :disabled="!conectado" :carregando="atualizandoGrupo" @click="atualizarSelecionado">
+          <UiIcone nome="atualizar" :tamanho="16" /> Atualizar do WhatsApp
+          <template #carregando>Lendo o WhatsApp…</template>
+        </UiBotao>
         <UiBotao variante="secundario" @click="detalhesAberto = false">Fechar</UiBotao>
       </template>
     </UiDialogo>

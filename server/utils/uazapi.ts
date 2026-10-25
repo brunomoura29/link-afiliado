@@ -3,7 +3,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 
 // Cliente da UazAPI (só no servidor). Doc: fornecida pelo usuário sob demanda — não
 // inventar rotas/campos. Implementado: instância (create/status/connect) e grupos
-// (list/invitelink/create).
+// (list/invitelink/create/updateAnnounce/updateLocked/updateName/updateDescription/updateImage).
 // O token de cada instância fica em whatsapp_credenciais (RLS sem políticas) e nunca
 // vai para o navegador.
 
@@ -26,7 +26,11 @@ function configuracao() {
 const MENSAGENS: Record<number, string> = {
   400: 'A UazAPI recusou os dados enviados.',
   401: 'O token da UazAPI é inválido ou expirou.',
+  403: 'O número conectado não é admin deste grupo.',
+  404: 'O grupo não foi encontrado no WhatsApp.',
   429: 'Limite de instâncias do WhatsApp atingido no plano da UazAPI.',
+  413: 'Texto ou imagem grande demais para o WhatsApp.',
+  415: 'O WhatsApp só aceita foto em JPEG.',
   503: 'A UazAPI está temporariamente indisponível. Tente de novo em instantes.'
 }
 
@@ -144,6 +148,7 @@ interface GrupoUazapi {
   OwnerCanSendMessage?: boolean
   IsAnnounce?: boolean // só admins mandam mensagem
   IsParent?: boolean // comunidade (não é grupo de conversa)
+  Topic?: string // descrição
   invite_link?: string // só para admin confirmado
   image_preview_url?: string
   image_url?: string
@@ -165,6 +170,7 @@ export async function listarGrupos(token: string) {
       admin: g.OwnerIsAdmin === true,
       podeEnviar: g.OwnerCanSendMessage !== false,
       soAdmins: g.IsAnnounce === true,
+      descricao: g.Topic?.trim() ?? '',
       convite: g.invite_link && CONVITE.test(g.invite_link) ? g.invite_link : null,
       foto: g.image_preview_url || g.image_url || null
     }))
@@ -192,6 +198,42 @@ export async function criarGrupoWhatsapp(token: string, nome: string) {
     membros: r.group.ParticipantCount || 1,
     convite: r.group.invite_link && CONVITE.test(r.group.invite_link) ? r.group.invite_link : null
   }
+}
+
+// POST /group/updateAnnounce — true: só admins mandam mensagem. Exige o número como admin (403).
+export async function definirSoAdmins(token: string, jid: string, soAdmins: boolean) {
+  const r = await chamar<{ group?: GrupoUazapi }>('/group/updateAnnounce', {
+    method: 'POST',
+    headers: { token },
+    body: { groupjid: jid, announce: soAdmins }
+  })
+  return r.group?.IsAnnounce ?? soAdmins
+}
+
+// POST /group/updateLocked — true: só admins mudam nome, descrição e foto. Exige admin (403).
+export async function definirEdicaoSoAdmins(token: string, jid: string, travado: boolean) {
+  const r = await chamar<{ group?: GrupoUazapi & { IsLocked?: boolean } }>('/group/updateLocked', {
+    method: 'POST',
+    headers: { token },
+    body: { groupjid: jid, locked: travado }
+  })
+  return r.group?.IsLocked ?? travado
+}
+
+// POST /group/updateName — 1 a 25 letras (limite da doc; criar aceita até 100). Exige admin.
+export async function renomearGrupo(token: string, jid: string, nome: string) {
+  await chamar('/group/updateName', { method: 'POST', headers: { token }, body: { groupjid: jid, name: nome } })
+}
+
+// POST /group/updateDescription — até 512 letras. Exige admin.
+export async function definirDescricao(token: string, jid: string, descricao: string) {
+  await chamar('/group/updateDescription', { method: 'POST', headers: { token }, body: { groupjid: jid, description: descricao } })
+}
+
+// POST /group/updateImage — JPEG até 640x640 (URL ou data URL base64) ou "remove". Exige admin.
+export async function definirImagem(token: string, jid: string, imagem: string) {
+  const r = await chamar<{ group?: GrupoUazapi }>('/group/updateImage', { method: 'POST', headers: { token }, body: { groupjid: jid, image: imagem } })
+  return r.group?.image_preview_url || r.group?.image_url || null
 }
 
 // Instância do cliente: devolve a existente ou cria na primeira vez

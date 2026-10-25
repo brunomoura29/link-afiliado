@@ -1,6 +1,6 @@
 // Categorias (Supabase: categorias) e grupos do WhatsApp (Supabase: whatsapp_destinos).
 // Os grupos chegam pela UazAPI (listar, obter convite e criar já ligados).
-// TODO (UazAPI, pedir a doc): revogar convite e configurar descrição/"só admins".
+// TODO (UazAPI, pedir a doc): revogar convite.
 import type { Tables, TablesInsert } from '~/types/database.types'
 
 export interface CategoriaGrupo {
@@ -30,6 +30,7 @@ export interface Grupo {
   foto: string | null
   podeEnviar: boolean // o número consegue mandar mensagem no grupo
   soAdmins: boolean // só admins mandam mensagem
+  descricao: string // descrição do grupo no WhatsApp
 }
 
 // Acima disso o grupo para de receber novos membros e o próximo assume
@@ -74,7 +75,8 @@ const daLinhaGrupo = (g: Tables<'whatsapp_destinos'>): Grupo => ({
   convite: g.convite_url,
   foto: g.foto_url,
   podeEnviar: g.pode_enviar,
-  soAdmins: g.so_admins
+  soAdmins: g.so_admins,
+  descricao: g.descricao
 })
 
 export type ErroSalvarCategoria = 'slug' | 'palavraChave' | 'outro' | null
@@ -216,17 +218,65 @@ export function useGrupos() {
   }
 
   // Cria no WhatsApp e já entra no fim da ordem da categoria. null = falhou (já avisou com toast)
-  // TODO: soAdmins passa a valer com a doc de "só admins enviam mensagens"
-  async function criarGrupo(c: CategoriaGrupo, nome: string, _soAdmins: boolean): Promise<Grupo | null> {
+  async function criarGrupo(c: CategoriaGrupo, nome: string, soAdmins: boolean): Promise<Grupo | null> {
     try {
-      const linha = await $fetch('/api/whatsapp/grupos/criar', { method: 'POST', body: { categoriaId: c.id, nome } })
+      const linha = await $fetch('/api/whatsapp/grupos/criar', { method: 'POST', body: { categoriaId: c.id, nome, soAdmins } })
       const g = daLinhaGrupo(linha)
       grupos.value.push(g)
+      if (soAdmins && !g.soAdmins) toast.info('O grupo ficou aberto', 'Não deu para deixar só admins enviando. Tente de novo nos detalhes do grupo.')
       return g
     } catch (e) {
       const msg = (e as { data?: { message?: string } }).data?.message
       toast.erro('Não foi possível criar o grupo', msg ?? 'Verifique sua internet e confira no WhatsApp se ele foi criado.')
       return null
+    }
+  }
+
+  // Muda no WhatsApp; a tela só troca depois que deu certo
+  async function definirSoAdmins(g: Grupo, ativo: boolean) {
+    try {
+      const r = await $fetch(`/api/whatsapp/grupos/${g.id}/so-admins`, { method: 'POST', body: { ativo } })
+      g.soAdmins = r.soAdmins
+      return true
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      toast.erro('Não foi possível mudar o grupo', msg ?? 'Verifique sua internet e tente de novo.')
+      return false
+    }
+  }
+
+  // Nome, descrição e/ou foto no WhatsApp (foto: data URL JPEG 640x640 ou 'remove').
+  // Se parte falhar, a tela fica com o que mudou de fato. false = algo falhou (já avisou)
+  async function editarGrupo(g: Grupo, mudancas: { nome?: string, descricao?: string, imagem?: string }) {
+    const aplicar = (m: { nome?: string, descricao?: string, foto_url?: string | null }) => {
+      if (m.nome !== undefined) g.nome = m.nome
+      if (m.descricao !== undefined) g.descricao = m.descricao
+      // Sem URL nova da UazAPI, mostra a foto enviada até o próximo "Atualizar"
+      if (m.foto_url !== undefined) g.foto = m.foto_url ?? (mudancas.imagem && mudancas.imagem !== 'remove' ? mudancas.imagem : null)
+    }
+    try {
+      aplicar(await $fetch(`/api/whatsapp/grupos/${g.id}/editar`, { method: 'POST', body: mudancas }))
+      return true
+    } catch (e) {
+      const erro = e as { data?: { message?: string, data?: { mudou?: { nome?: string, descricao?: string, foto_url?: string | null } } } }
+      if (erro.data?.data?.mudou) aplicar(erro.data.data.mudou)
+      toast.erro('Não foi possível mudar o grupo', erro.data?.message ?? 'Verifique sua internet e tente de novo.')
+      return false
+    }
+  }
+
+  // Relê o grupo no WhatsApp (traz mudanças feitas pelo celular). false = falhou (já avisou)
+  async function atualizarDoWhatsapp(g: Grupo) {
+    try {
+      const { linha, recente } = await $fetch(`/api/whatsapp/grupos/${g.id}/atualizar`, { method: 'POST' })
+      Object.assign(g, daLinhaGrupo(linha))
+      if (recente) toast.info('Grupo atualizado', 'Você mudou este grupo há pouco: o WhatsApp leva cerca de 1 minuto para confirmar. Se mudou algo pelo celular agora, atualize de novo daqui a pouco.')
+      else toast.sucesso('Grupo atualizado', 'Dados lidos agora do WhatsApp.')
+      return true
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      toast.erro('Não foi possível atualizar o grupo', msg ?? 'Verifique sua internet e tente de novo.')
+      return false
     }
   }
 
@@ -237,6 +287,6 @@ export function useGrupos() {
     categorias, grupos, carregar, daCategoria, lotado, entradaAtiva, linkEntrada,
     salvarCategoria, excluirCategoria,
     definirOfertas, definirCategoria, mover, proximoNomeGrupo,
-    sincronizar, buscarConvite, novoConvite, criarGrupo
+    sincronizar, buscarConvite, novoConvite, criarGrupo, definirSoAdmins, editarGrupo, atualizarDoWhatsapp
   }
 }

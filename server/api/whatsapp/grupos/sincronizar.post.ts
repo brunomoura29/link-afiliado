@@ -24,24 +24,15 @@ export default defineEventHandler(async (event) => {
     throw e
   }
 
-  const agora = new Date().toISOString()
-  const { data: existentes } = await admin.from('whatsapp_destinos').select('id, jid, categoria_id, convite_url').eq('owner_id', usuario.sub).eq('tipo', 'grupo')
+  const { data: existentes } = await admin.from('whatsapp_destinos').select('id, jid, categoria_id, nome, descricao, so_admins, convite_url, foto_url, editado_no_app_em').eq('owner_id', usuario.sub).eq('tipo', 'grupo')
   const porJid = new Map((existentes ?? []).map(d => [d.jid, d]))
 
-  // Atualiza/insere só os dados que vêm do WhatsApp (categoria/ordem/recebe_ofertas ficam como estão).
-  // A listagem não traz o convite: mantém o que já foi buscado enquanto o número for admin.
+  // Atualiza/insere só os dados que vêm do WhatsApp (categoria/ordem/recebe_ofertas ficam como estão)
   const linhas = grupos.map(g => ({
     owner_id: usuario.sub,
     jid: g.jid,
     tipo: 'grupo',
-    nome: g.nome,
-    membros: g.membros,
-    admin: g.admin,
-    pode_enviar: g.podeEnviar,
-    so_admins: g.soAdmins,
-    convite_url: g.convite ?? (g.admin ? porJid.get(g.jid)?.convite_url ?? null : null),
-    foto_url: g.foto,
-    sincronizado_em: agora
+    ...dadosDaListagem(g, porJid.get(g.jid))
   }))
   if (linhas.length) {
     const { error } = await admin.from('whatsapp_destinos').upsert(linhas, { onConflict: 'owner_id,jid' })

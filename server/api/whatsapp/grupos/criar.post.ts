@@ -1,18 +1,19 @@
 import { serverSupabaseServiceRole, serverSupabaseUser } from '#supabase/server'
 
 // "Novo grupo" da página da categoria: cria o grupo no WhatsApp do usuário (só com o
-// próprio número, como admin), busca o convite e já coloca no fim da ordem da categoria.
-// TODO (UazAPI, próxima doc): aplicar "só admins enviam mensagens" (soAdmins).
+// próprio número, como admin), trava a edição de nome/descrição/foto para só admins,
+// aplica "só admins enviam mensagens" e a descrição da categoria, busca o convite e já
+// coloca no fim da ordem da categoria.
 export default defineEventHandler(async (event) => {
   const usuario = await serverSupabaseUser(event)
   if (!usuario?.sub) throw createError({ statusCode: 401, statusMessage: 'nao_logado' })
 
-  const corpo = await readBody<{ categoriaId?: string, nome?: string }>(event)
+  const corpo = await readBody<{ categoriaId?: string, nome?: string, soAdmins?: boolean }>(event)
   const nome = corpo?.nome?.trim() ?? ''
   if (nome.length < 2 || nome.length > 100) throw createError({ statusCode: 400, statusMessage: 'nome_invalido', message: 'O nome do grupo precisa ter de 2 a 100 letras.' })
 
   const admin = serverSupabaseServiceRole(event)
-  const { data: categoria } = await admin.from('categorias').select('id').eq('id', corpo?.categoriaId ?? '').eq('owner_id', usuario.sub).maybeSingle()
+  const { data: categoria } = await admin.from('categorias').select('id, descricao').eq('id', corpo?.categoriaId ?? '').eq('owner_id', usuario.sub).maybeSingle()
   if (!categoria) throw createError({ statusCode: 404, statusMessage: 'categoria_nao_encontrada' })
 
   const { data: cred } = await admin.from('whatsapp_credenciais').select('token').eq('owner_id', usuario.sub).maybeSingle()
@@ -31,8 +32,16 @@ export default defineEventHandler(async (event) => {
   }
 
   // O grupo já existe no WhatsApp: daqui em diante nada pode falhar a criação.
-  // Sem convite agora, ele é buscado de novo no próximo "Atualizar".
-  const convite = grupo.convite ?? await obterConvite(cred.token, grupo.jid).catch(() => null)
+  // Sem convite agora, ele é buscado de novo no próximo "Atualizar"; se o "só admins" falhar,
+  // o grupo fica aberto (gravado assim) e dá para ligar nos detalhes do grupo. A trava de
+  // edição é sempre ligada (ninguém de fora troca o nome do grupo); se falhar, segue sem ela.
+  const textoCategoria = categoria.descricao.trim().slice(0, 512)
+  const [convite, soAdmins, descricao] = await Promise.all([
+    grupo.convite ?? obterConvite(cred.token, grupo.jid).catch(() => null),
+    corpo?.soAdmins ? definirSoAdmins(cred.token, grupo.jid, true).catch(() => false) : false,
+    textoCategoria ? definirDescricao(cred.token, grupo.jid, textoCategoria).then(() => textoCategoria, () => '') : '',
+    definirEdicaoSoAdmins(cred.token, grupo.jid, true).catch(() => false)
+  ])
 
   const { data: ultimo } = await admin.from('whatsapp_destinos').select('ordem').eq('owner_id', usuario.sub).eq('categoria_id', categoria.id).order('ordem', { ascending: false }).limit(1).maybeSingle()
   const { data: linha, error } = await admin.from('whatsapp_destinos').upsert({
@@ -43,12 +52,14 @@ export default defineEventHandler(async (event) => {
     membros: grupo.membros,
     admin: true,
     pode_enviar: true,
-    so_admins: false,
+    so_admins: soAdmins,
+    descricao,
     convite_url: convite,
     categoria_id: categoria.id,
     ordem: (ultimo?.ordem ?? 0) + 1,
     recebe_ofertas: true,
-    sincronizado_em: new Date().toISOString()
+    sincronizado_em: new Date().toISOString(),
+    editado_no_app_em: new Date().toISOString()
   }, { onConflict: 'owner_id,jid' }).select().single()
   if (error) throw createError({ statusCode: 500, statusMessage: 'erro_ao_salvar', message: 'O grupo foi criado no WhatsApp, mas não foi salvo aqui. Toque em "Atualizar" na tela de Grupos e coloque ele na categoria.' })
 

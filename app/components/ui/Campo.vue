@@ -7,6 +7,7 @@ const props = defineProps<{
   inputmode?: 'text' | 'url' | 'numeric' | 'email' | 'tel'
   autocomplete?: string
   maxlength?: number
+  linhas?: number // > 1: vira caixa de texto com várias linhas
   // Formata enquanto digita/cola (ex.: telefone). Aplicado no próprio input para o que
   // aparece na tela nunca divergir do valor (formatar num watch no pai deixava sobrar
   // caractere quando o valor formatado não mudava).
@@ -43,7 +44,20 @@ watch(() => props.erro, (novo) => {
       ]"
       @animationend="tremendo = false"
     >
+      <textarea
+        v-if="linhas && linhas > 1"
+        :id="id"
+        :value="modelo"
+        :rows="linhas"
+        placeholder=" "
+        :maxlength="maxlength"
+        :aria-invalid="!!erro || undefined"
+        :aria-describedby="erro || dica ? `${id}-msg` : undefined"
+        class="peer block w-full resize-none bg-transparent px-4 pb-2 pt-6 text-body text-fg outline-none"
+        @input="aoDigitar"
+      />
       <input
+        v-else
         :id="id"
         :value="modelo"
         :type="type ?? 'text'"
@@ -59,10 +73,11 @@ watch(() => props.erro, (novo) => {
       >
       <label
         :for="id"
-        class="pointer-events-none absolute left-4 top-1/2 origin-left -translate-y-1/2 text-body text-muted
+        class="pointer-events-none absolute left-4 origin-left -translate-y-1/2 text-body text-muted
                transition-all duration-200 ease-out
                peer-focus:top-[18px] peer-focus:scale-[.8] peer-focus:text-fg
                peer-[:not(:placeholder-shown)]:top-[18px] peer-[:not(:placeholder-shown)]:scale-[.8]"
+        :class="linhas && linhas > 1 ? 'top-[28px]' : 'top-1/2'"
       >{{ rotulo }}</label>
       <div v-if="$slots.fim" class="absolute right-3 top-1/2 -translate-y-1/2">
         <slot name="fim" />

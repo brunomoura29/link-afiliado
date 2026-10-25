@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Gaveta de baixo no celular, janela centralizada a partir de sm.
-withDefaults(defineProps<{ titulo: string, descricao?: string, largura?: 'padrao' | 'larga' }>(), { largura: 'padrao' })
+// "ampla": cresce em telas grandes (lg), para conteúdo em duas colunas.
+withDefaults(defineProps<{ titulo: string, descricao?: string, largura?: 'padrao' | 'larga' | 'ampla' }>(), { largura: 'padrao' })
 const aberto = defineModel<boolean>({ default: false })
 
 const fecharComEsc = (e: KeyboardEvent) => e.key === 'Escape' && (aberto.value = false)
@@ -22,7 +23,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', fecharComEsc))
           :aria-label="titulo"
           class="pointer-events-auto w-full rounded-t-[20px] border border-line bg-elevated px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 shadow-pop
                  sm:rounded-lg sm:p-6"
-          :class="largura === 'larga' ? 'sm:max-w-xl' : 'sm:max-w-sm'"
+          :class="{ padrao: 'sm:max-w-sm', larga: 'sm:max-w-xl', ampla: 'sm:max-w-xl lg:max-w-4xl' }[largura]"
         >
           <span class="mx-auto mb-4 block h-1.5 w-10 rounded-full bg-line sm:hidden" />
           <slot name="icone" />
@@ -33,6 +34,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', fecharComEsc))
           <div
             v-if="$slots.default"
             class="-ml-1 -mr-3 mt-4 max-h-[60dvh] overflow-y-auto py-1 pl-1 pr-3 [scrollbar-width:thin] sm:-mr-5 sm:pr-5"
+            :class="largura === 'ampla' && 'lg:max-h-[72dvh]'"
           >
             <slot />
           </div>
