@@ -27,6 +27,9 @@ export interface Grupo {
   ordem: number // ordem na rotação de entrada dentro da categoria
   recebeOfertas: boolean
   convite: string | null
+  foto: string | null
+  podeEnviar: boolean // o número consegue mandar mensagem no grupo
+  soAdmins: boolean // só admins mandam mensagem
 }
 
 // Acima disso o grupo para de receber novos membros e o próximo assume
@@ -66,7 +69,10 @@ const daLinhaGrupo = (g: Tables<'whatsapp_destinos'>): Grupo => ({
   categoriaId: g.categoria_id,
   ordem: g.ordem,
   recebeOfertas: g.recebe_ofertas,
-  convite: g.convite_url
+  convite: g.convite_url,
+  foto: g.foto_url,
+  podeEnviar: g.pode_enviar,
+  soAdmins: g.so_admins
 })
 
 export type ErroSalvarCategoria = 'slug' | 'palavraChave' | 'outro' | null
@@ -178,8 +184,20 @@ export function useGrupos() {
     toast.info('Disponível em breve', 'Funciona quando o WhatsApp for ligado pela UazAPI.')
     return null
   }
-  // null = não disponível ainda (já avisou com toast)
-  const sincronizar = async (): Promise<number | null> => depoisDaUazapi()
+  // Busca os grupos no WhatsApp (UazAPI) e recarrega. null = falhou (já avisou com toast)
+  async function sincronizar(): Promise<{ total: number, novos: number, removidos: number } | null> {
+    try {
+      const r = await $fetch('/api/whatsapp/grupos/sincronizar', { method: 'POST' })
+      await carregar()
+      return r
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      toast.erro('Não foi possível buscar os grupos', msg ?? 'Verifique sua internet e tente de novo.')
+      return null
+    }
+  }
+
+  // Dependem de outras rotas da UazAPI (ainda sem doc). null = não disponível ainda (já avisou)
   const novoConvite = async (_g: Grupo): Promise<string | null> => depoisDaUazapi()
   const criarGrupo = async (_c: CategoriaGrupo, _nome: string, _soAdmins: boolean): Promise<Grupo | null> => depoisDaUazapi()
 

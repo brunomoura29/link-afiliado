@@ -132,6 +132,40 @@ export async function conectarInstancia(token: string, telefone?: string) {
   }
 }
 
+interface GrupoUazapi {
+  JID?: string
+  Name?: string
+  ParticipantCount?: number
+  OwnerIsAdmin?: boolean // pode vir ausente quando falso
+  OwnerCanSendMessage?: boolean
+  IsAnnounce?: boolean // só admins mandam mensagem
+  IsParent?: boolean // comunidade (não é grupo de conversa)
+  invite_link?: string // só para admin confirmado
+  image_preview_url?: string
+  image_url?: string
+}
+
+// GET /group/list (legado, sem paginação). noParticipants=true: só o resumo de cada grupo.
+// force=true pede atualização (a UazAPI pode reaproveitar uma de até 20 s atrás).
+export async function listarGrupos(token: string) {
+  const r = await chamar<{ groups?: GrupoUazapi[] }>('/group/list?noParticipants=true&force=true', {
+    method: 'GET',
+    headers: { token }
+  })
+  return (r.groups ?? [])
+    .filter(g => g.JID && !g.IsParent)
+    .map(g => ({
+      jid: g.JID!,
+      nome: g.Name?.trim() || 'Grupo sem nome',
+      membros: g.ParticipantCount ?? 0,
+      admin: g.OwnerIsAdmin === true,
+      podeEnviar: g.OwnerCanSendMessage !== false,
+      soAdmins: g.IsAnnounce === true,
+      convite: g.invite_link || null,
+      foto: g.image_preview_url || g.image_url || null
+    }))
+}
+
 // Instância do cliente: devolve a existente ou cria na primeira vez
 export async function garantirInstancia(event: H3Event, ownerId: string) {
   const admin = serverSupabaseServiceRole(event)

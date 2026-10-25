@@ -315,6 +315,16 @@ próxima (ver checklist de aceite no fim).
   instância `theus`, agora com o número pessoal do usuário). Código pelo número
   usa o mesmo caminho, ainda sem teste prático. Plano da UazAPI: 2 vagas, 4
   instâncias existentes (não dá para criar novas).
+- **Grupos (implementado)** — `GET /group/list?noParticipants=true&force=true`
+  (legado; a doc recomenda `POST /group/list` — trocar quando tiver a doc).
+  Campos usados: `JID`, `Name`, `ParticipantCount`, `OwnerIsAdmin` (ausente =
+  falso), `OwnerCanSendMessage`, `IsAnnounce`, `IsParent` (comunidade → ignorar),
+  `image_preview_url`. `POST /api/whatsapp/grupos/sincronizar` faz upsert por
+  (owner_id, jid) sem tocar em categoria/ordem/recebe_ofertas e apaga os que
+  sumiram (só se a lista veio não vazia). Teste real: 182 grupos, admin em 55,
+  ~5 s. **`invite_link` não veio na listagem** (0 de 55) → convite precisa de
+  outra rota (pedir a doc). Há grupo com 1.525 membros (> 1.024): hoje conta
+  como lotado.
 - Nunca enviar em sequência imediata — sempre via fila (próximo item).
 
 ### 7. Fila de envio (cron)

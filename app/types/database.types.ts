@@ -456,13 +456,17 @@ export type Database = {
           capacidade: number
           categoria_id: string | null
           convite_url: string | null
+          foto_url: string | null
           id: string
           jid: string
           membros: number
           nome: string
           ordem: number
           owner_id: string
+          pode_enviar: boolean
           recebe_ofertas: boolean
+          sincronizado_em: string | null
+          so_admins: boolean
           tipo: string
         }
         Insert: {
@@ -471,13 +475,17 @@ export type Database = {
           capacidade?: number
           categoria_id?: string | null
           convite_url?: string | null
+          foto_url?: string | null
           id?: string
           jid: string
           membros?: number
           nome?: string
           ordem?: number
           owner_id?: string
+          pode_enviar?: boolean
           recebe_ofertas?: boolean
+          sincronizado_em?: string | null
+          so_admins?: boolean
           tipo?: string
         }
         Update: {
@@ -486,13 +494,17 @@ export type Database = {
           capacidade?: number
           categoria_id?: string | null
           convite_url?: string | null
+          foto_url?: string | null
           id?: string
           jid?: string
           membros?: number
           nome?: string
           ordem?: number
           owner_id?: string
+          pode_enviar?: boolean
           recebe_ofertas?: boolean
+          sincronizado_em?: string | null
+          so_admins?: boolean
           tipo?: string
         }
         Relationships: [

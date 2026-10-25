@@ -15,7 +15,8 @@ const iniciais = computed(() => props.grupo.nome.replace(/[^\p{L}\p{N}\s]/gu, ''
   >
     <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="$emit('abrir')">
       <span class="relative flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-label font-semibold">
-        {{ iniciais }}
+        <img v-if="grupo.foto" :src="grupo.foto" alt="" loading="lazy" class="size-11 rounded-full object-cover">
+        <template v-else>{{ iniciais }}</template>
         <span
           v-if="posicao"
           class="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full border-2 border-elevated bg-fg text-[10px] text-bg"
@@ -38,8 +39,14 @@ const iniciais = computed(() => props.grupo.nome.replace(/[^\p{L}\p{N}\s]/gu, ''
             <span class="size-1.5 animate-pulse rounded-full bg-whatsapp" /> Recebendo membros
           </span>
           <span v-else-if="lotado" class="inline-flex h-6 items-center rounded-full bg-status-rejeitada/10 px-2 text-[12px] font-semibold text-status-rejeitada">Lotado</span>
-          <span v-if="!grupo.admin" class="inline-flex h-6 items-center gap-1 rounded-full border border-line px-2 text-[12px] text-muted">
+          <span v-if="!grupo.podeEnviar" class="inline-flex h-6 items-center gap-1 rounded-full bg-status-rejeitada/10 px-2 text-[12px] font-semibold text-status-rejeitada">
+            <UiIcone nome="alerta" :tamanho="12" /> Você não pode enviar
+          </span>
+          <span v-else-if="!grupo.admin" class="inline-flex h-6 items-center gap-1 rounded-full border border-line px-2 text-[12px] text-muted">
             <UiIcone nome="alerta" :tamanho="12" /> Não é admin
+          </span>
+          <span v-if="grupo.soAdmins" class="inline-flex h-6 items-center gap-1 rounded-full border border-line px-2 text-[12px] text-muted">
+            <UiIcone nome="cadeado" :tamanho="12" /> Só admins falam
           </span>
         </span>
       </span>

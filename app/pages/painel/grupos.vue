@@ -26,10 +26,11 @@ const membrosDa = (c: CategoriaGrupo) => daCategoria(c.id).reduce((s, g) => s + 
 const sincronizando = ref(false)
 async function atualizar() {
   sincronizando.value = true
-  const total = await sincronizar()
+  const r = await sincronizar()
   sincronizando.value = false
-  if (total === null) return
-  toast.sucesso('Grupos atualizados', `Encontramos ${total} grupos no seu WhatsApp.`)
+  if (!r) return
+  const extras = [r.novos && `${r.novos} novos`, r.removidos && `${r.removidos} removidos`].filter(Boolean).join(', ')
+  toast.sucesso('Grupos atualizados', `Encontramos ${r.total} grupos no seu WhatsApp${extras ? ` (${extras})` : ''}.`)
 }
 
 // Copiar / compartilhar
