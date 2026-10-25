@@ -5,7 +5,8 @@ definePageMeta({ layout: 'painel', pageTransition: { name: 'pagina', mode: 'out-
 useHead({ title: 'Configurações · LinkAfiliado' })
 
 const toast = useToast()
-const { config, salvar } = useConfiguracoes()
+const { config, email, carregar, salvar, trocarSenha, excluirConta } = useConfiguracoes()
+await useAsyncData('configuracoes', carregar)
 
 // Edita uma cópia; a barra de salvar aparece quando algo muda
 const r = reactive<Configuracoes>({ ...config.value })
@@ -23,7 +24,7 @@ const resumo = computed(() => {
   return `Até ${r.limiteDiario} ofertas por grupo por dia, uma a cada ${r.intervaloMin}–${r.intervaloMax} min, ${janela}.`
 })
 
-// Prévia da legenda com o tom escolhido
+// Prévia da legenda com o tom escolhido (exemplo fixo; a de verdade é escrita pela IA)
 const TONS = [
   { valor: 'animado', rotulo: 'Animado' },
   { valor: 'direto', rotulo: 'Direto ao ponto' },
@@ -31,44 +32,87 @@ const TONS = [
 ]
 const previa = computed(() => {
   const base = {
-    animado: '🔥 Achado do dia! Air fryer 4L de R$ 449,00 por R$ 299,00 (33% OFF). Corre que é por tempo limitado! 🏃',
+    animado: '🔥 Achado do dia! A *Air fryer 4L* saiu de R$ 449,00 por *R$ 299,00* (33% OFF). Batata crocante sem óleo! 🍟',
     direto: '🍳 Air fryer 4L: de R$ 449,00 por R$ 299,00 (33% OFF).',
     profissional: 'Oferta: Air fryer 4L digital. De R$ 449,00 por R$ 299,00, desconto de 33%.'
   }[r.tom]
-  const texto = r.emojis ? base : base.replace(/\p{Extended_Pictographic}️?\s?/gu, '').trim()
-  return `${texto}\n\n👉 meli.la/3kQz7${r.rodape.trim() ? `\n\n${r.rodape.trim()}` : ''}`
+  const texto = r.emojis ? base : base.replace(/\p{Extended_Pictographic}\uFE0F?\s?/gu, '').trim()
+  return `${texto}\n\n${r.emojis ? '👉 ' : 'Link: '}meli.la/3kQz7${r.rodape.trim() ? `\n\n${r.rodape.trim()}` : ''}`
 })
 
 const erroHorario = computed(() => r.pausaNoturna && r.inicio === r.fim ? 'Início e fim não podem ser iguais' : '')
-const erroEmail = ref('')
-watch(() => r.email, () => (erroEmail.value = ''))
+const erroNome = ref('')
+const erroTelefone = ref('')
+watch(() => r.nome, () => (erroNome.value = ''))
+watch(() => r.telefone, () => (erroTelefone.value = ''))
 
 const salvando = ref(false)
 const salvo = ref(false)
 async function salvarTudo() {
-  erroEmail.value = ehEmail(r.email) ? '' : 'Informe um e-mail válido'
-  if (erroHorario.value || erroEmail.value) {
+  erroNome.value = r.nome.trim().length < 2 ? 'Informe seu nome' : ''
+  erroTelefone.value = r.telefone && !ehTelefone(r.telefone) ? 'Informe o celular com DDD' : ''
+  if (erroHorario.value || erroNome.value || erroTelefone.value) {
     toast.erro('Confira os campos destacados')
     return
   }
   salvando.value = true
-  await salvar({ ...r })
+  const erro = await salvar({ ...r })
   salvando.value = false
+  if (erro === 'telefone') {
+    erroTelefone.value = 'Esse celular já está em outra conta'
+    return
+  }
+  if (erro) {
+    toast.erro('Não foi possível salvar', 'Verifique sua internet e tente de novo.')
+    return
+  }
   salvo.value = true
-  toast.sucesso('Configurações salvas')
+  toast.sucesso('Configurações salvas', 'As próximas legendas já seguem o novo estilo.')
   setTimeout(() => (salvo.value = false), 1200)
+}
+
+// Trocar senha
+const senhaAberta = ref(false)
+const novaSenha = ref('')
+const erroSenha = ref('')
+const trocandoSenha = ref(false)
+watch(novaSenha, () => (erroSenha.value = ''))
+function abrirSenha() {
+  novaSenha.value = ''
+  senhaAberta.value = true
+}
+async function confirmarSenha() {
+  if (novaSenha.value.length < 8) {
+    erroSenha.value = 'A senha precisa ter pelo menos 8 caracteres'
+    return
+  }
+  trocandoSenha.value = true
+  const erro = await trocarSenha(novaSenha.value)
+  trocandoSenha.value = false
+  if (erro === 'fraca') erroSenha.value = 'Senha fraca: use letras e números'
+  else if (erro === 'igual') erroSenha.value = 'A nova senha é igual à atual'
+  else if (erro) toast.erro('Não foi possível trocar a senha', 'Verifique sua internet e tente de novo.')
+  else {
+    senhaAberta.value = false
+    toast.sucesso('Senha trocada')
+  }
 }
 
 // Excluir conta
 const excluirAberto = ref(false)
 const textoConfirmacao = ref('')
 const excluindo = ref(false)
-async function excluirConta() {
+async function confirmarExclusao() {
   excluindo.value = true
-  await new Promise(res => setTimeout(res, 1200)) // TODO: Supabase (apagar dados + desconectar UazAPI)
-  excluindo.value = false
-  excluirAberto.value = false
-  toast.info('Prévia', 'Aqui a conta seria excluída e você voltaria para o login.')
+  try {
+    await excluirConta()
+  } catch {
+    excluindo.value = false
+    toast.erro('Não foi possível excluir a conta', 'Verifique sua internet e tente de novo.')
+    return
+  }
+  // Recarrega para limpar tudo que estava em memória
+  reloadNuxtApp({ path: '/login' })
 }
 </script>
 
@@ -136,10 +180,22 @@ async function excluirConta() {
     <section v-reveal>
       <h2 class="mb-3 font-semibold">Sua conta</h2>
       <UiCard class="flex flex-col gap-4 p-5">
-        <UiCampo v-model="r.nome" rotulo="Nome" autocomplete="name" />
-        <UiCampo v-model="r.email" rotulo="E-mail" type="email" inputmode="email" autocomplete="email" :erro="erroEmail" />
-        <UiCampo v-model="r.telefone" rotulo="Celular com DDD" type="tel" inputmode="tel" autocomplete="tel-national" :formatar="formatarTelefone" />
-        <UiBotao variante="secundario" tamanho="sm" class="self-start" @click="toast.info('Em breve', 'A troca de senha entra junto com o backend.')">
+        <UiCampo v-model="r.nome" rotulo="Nome" autocomplete="name" :erro="erroNome" />
+        <div class="rounded border border-line bg-surface px-4 py-2">
+          <p class="text-[12.8px] text-muted">E-mail</p>
+          <p class="truncate">{{ email }}</p>
+        </div>
+        <UiCampo
+          v-model="r.telefone"
+          rotulo="Celular com DDD"
+          type="tel"
+          inputmode="tel"
+          autocomplete="tel-national"
+          :formatar="formatarTelefone"
+          :erro="erroTelefone"
+          dica="Também serve para entrar no app."
+        />
+        <UiBotao variante="secundario" tamanho="sm" class="self-start" @click="abrirSenha">
           <UiIcone nome="cadeado" :tamanho="16" /> Trocar senha
         </UiBotao>
       </UiCard>
@@ -150,7 +206,7 @@ async function excluirConta() {
       <UiCard class="flex flex-col gap-3 !border-status-rejeitada/30 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p class="font-semibold">Excluir conta</p>
-          <p class="text-label text-muted">Apaga categorias, ofertas, links e leads, e desconecta o WhatsApp.</p>
+          <p class="text-label text-muted">Apaga sua conta com categorias, links, ofertas e leads. Não dá para desfazer.</p>
         </div>
         <UiBotao variante="secundario" tamanho="sm" class="shrink-0 text-status-rejeitada" @click="excluirAberto = true; textoConfirmacao = ''">
           Excluir conta
@@ -180,6 +236,19 @@ async function excluirConta() {
       </div>
     </Transition>
 
+    <UiDialogo v-model="senhaAberta" titulo="Trocar senha" descricao="Depois de trocar, use a nova senha para entrar.">
+      <form id="form-senha" novalidate @submit.prevent="confirmarSenha">
+        <UiCampoSenha v-model="novaSenha" rotulo="Nova senha" nova :erro="erroSenha" />
+      </form>
+      <template #acoes>
+        <UiBotao variante="secundario" :disabled="trocandoSenha" @click="senhaAberta = false">Cancelar</UiBotao>
+        <UiBotao type="submit" form="form-senha" :carregando="trocandoSenha">
+          Trocar senha
+          <template #carregando>Trocando…</template>
+        </UiBotao>
+      </template>
+    </UiDialogo>
+
     <UiDialogo
       v-model="excluirAberto"
       titulo="Excluir sua conta?"
@@ -188,7 +257,7 @@ async function excluirConta() {
       <UiCampo v-model="textoConfirmacao" rotulo='Digite "EXCLUIR" para confirmar' />
       <template #acoes>
         <UiBotao variante="secundario" :disabled="excluindo" @click="excluirAberto = false">Cancelar</UiBotao>
-        <UiBotao variante="perigo" :disabled="textoConfirmacao.trim().toUpperCase() !== 'EXCLUIR'" :carregando="excluindo" @click="excluirConta">
+        <UiBotao variante="perigo" :disabled="textoConfirmacao.trim().toUpperCase() !== 'EXCLUIR'" :carregando="excluindo" @click="confirmarExclusao">
           Excluir para sempre
           <template #carregando>Excluindo…</template>
         </UiBotao>
