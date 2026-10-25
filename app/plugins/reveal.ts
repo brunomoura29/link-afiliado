@@ -16,7 +16,9 @@ export default defineNuxtPlugin((nuxtApp) => {
             observer?.unobserve(e.target)
           }
         }
-      }, { threshold: .12 })
+      // Aparece quando o topo entra um pouco na tela. Não usar threshold em %: um bloco
+      // mais alto que a tela (ex.: lista com 182 grupos) nunca atingiria e ficaria invisível.
+      }, { threshold: 0, rootMargin: '0px 0px -8% 0px' })
       observer.observe(el)
     },
     unmounted(el) {
