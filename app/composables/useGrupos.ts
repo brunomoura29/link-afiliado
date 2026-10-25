@@ -1,7 +1,6 @@
 // Categorias (Supabase: categorias) e grupos do WhatsApp (Supabase: whatsapp_destinos).
-// Os grupos chegam pela UazAPI; até ela ser ligada, a lista fica vazia.
-// TODO (UazAPI, pedir a doc): listar grupos, nº de participantes, se o número é admin,
-// obter/revogar convite, criar grupo e configurar nome/foto/descrição/"só admins".
+// Os grupos chegam pela UazAPI (listar, obter convite e criar já ligados).
+// TODO (UazAPI, pedir a doc): revogar convite e configurar descrição/"só admins".
 import type { Tables, TablesInsert } from '~/types/database.types'
 
 export interface CategoriaGrupo {
@@ -162,9 +161,25 @@ export function useGrupos() {
 
   const definirOfertas = (g: Grupo, recebe: boolean) => atualizarGrupo(g, { recebeOfertas: recebe })
 
-  function definirCategoria(g: Grupo, categoriaId: string | null) {
+  async function definirCategoria(g: Grupo, categoriaId: string | null) {
     const ordem = (daCategoria(categoriaId).filter(x => x.id !== g.id).at(-1)?.ordem ?? 0) + 1
-    return atualizarGrupo(g, { categoriaId, ordem, recebeOfertas: !!categoriaId })
+    await atualizarGrupo(g, { categoriaId, ordem, recebeOfertas: !!categoriaId })
+    // Entrou na rotação: busca o convite em segundo plano (leva alguns segundos; sem toast
+    // se falhar — dá para tentar de novo nos detalhes do grupo)
+    if (categoriaId && g.admin && !g.convite) void buscarConvite(g, true)
+  }
+
+  // Convite atual do grupo (não revoga). null = falhou (avisa com toast, a não ser em silêncio)
+  async function buscarConvite(g: Grupo, silencioso = false): Promise<string | null> {
+    try {
+      const { convite } = await $fetch(`/api/whatsapp/grupos/${g.id}/convite`, { method: 'POST' })
+      g.convite = convite
+      return convite
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      if (!silencioso) toast.erro('Não foi possível buscar o convite', msg ?? 'Verifique sua internet e tente de novo.')
+      return null
+    }
   }
 
   async function mover(g: Grupo, direcao: -1 | 1) {
@@ -200,14 +215,28 @@ export function useGrupos() {
     }
   }
 
-  // Dependem de outras rotas da UazAPI (ainda sem doc). null = não disponível ainda (já avisou)
+  // Cria no WhatsApp e já entra no fim da ordem da categoria. null = falhou (já avisou com toast)
+  // TODO: soAdmins passa a valer com a doc de "só admins enviam mensagens"
+  async function criarGrupo(c: CategoriaGrupo, nome: string, _soAdmins: boolean): Promise<Grupo | null> {
+    try {
+      const linha = await $fetch('/api/whatsapp/grupos/criar', { method: 'POST', body: { categoriaId: c.id, nome } })
+      const g = daLinhaGrupo(linha)
+      grupos.value.push(g)
+      return g
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      toast.erro('Não foi possível criar o grupo', msg ?? 'Verifique sua internet e confira no WhatsApp se ele foi criado.')
+      return null
+    }
+  }
+
+  // Depende de outra rota da UazAPI (ainda sem doc). null = não disponível ainda (já avisou)
   const novoConvite = async (_g: Grupo): Promise<string | null> => depoisDaUazapi()
-  const criarGrupo = async (_c: CategoriaGrupo, _nome: string, _soAdmins: boolean): Promise<Grupo | null> => depoisDaUazapi()
 
   return {
     categorias, grupos, carregar, daCategoria, lotado, entradaAtiva, linkEntrada,
     salvarCategoria, excluirCategoria,
     definirOfertas, definirCategoria, mover, proximoNomeGrupo,
-    sincronizar, novoConvite, criarGrupo
+    sincronizar, buscarConvite, novoConvite, criarGrupo
   }
 }

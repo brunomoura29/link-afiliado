@@ -2,13 +2,18 @@
 import type { Grupo } from '~/composables/useGrupos'
 
 // Os grupos do WhatsApp. Cada grupo fica em UMA categoria (escolhida aqui ou na página
-// da categoria). Rotação, link de entrada e "novo grupo" ficam na página da categoria.
+// da categoria). Rotação e link de entrada ficam na página da categoria; "novo grupo"
+// existe nas duas (aqui é preciso escolher a categoria).
 definePageMeta({ layout: 'painel', pageTransition: { name: 'pagina', mode: 'out-in' } })
 useHead({ title: 'Grupos · LinkAfiliado' })
 
 const toast = useToast()
+const { disparar } = useConfete()
 const { conectado } = useWhatsapp()
-const { categorias, grupos, sincronizar, definirCategoria, definirOfertas, novoConvite } = useGrupos()
+const {
+  categorias, grupos, sincronizar, definirCategoria, definirOfertas, buscarConvite, novoConvite,
+  proximoNomeGrupo, criarGrupo
+} = useGrupos()
 
 const categoriaDe = (g: Grupo) => categorias.value.find(c => c.id === g.categoriaId)
 
@@ -82,6 +87,62 @@ async function gerarConvite() {
   if (convite) toast.sucesso('Novo convite gerado', 'O link de entrada da categoria continua o mesmo.')
 }
 
+const buscandoConvite = ref(false)
+async function buscarConviteSelecionado() {
+  if (!selecionado.value) return
+  buscandoConvite.value = true
+  await buscarConvite(selecionado.value)
+  buscandoConvite.value = false
+}
+
+// Novo grupo: criado no WhatsApp já numa categoria (sem categoria não entra na rotação)
+const novoAberto = ref(false)
+const categoriaNovo = ref('')
+const nomeNovo = ref('')
+const soAdminsNovo = ref(true)
+const erroCategoria = ref('')
+const erroNome = ref('')
+const criando = ref(false)
+const criado = ref(false)
+const botaoCriar = ref<{ $el: HTMLElement }>()
+const opcoesCategoriaNovo = computed(() => categorias.value.map(c => ({ valor: c.id, rotulo: `${c.emoji}  ${c.nome}` })))
+watch(nomeNovo, () => (erroNome.value = ''))
+// Sugere o nome e o "só admins" da categoria escolhida
+function sugerir(id: string) {
+  erroCategoria.value = ''
+  const c = categorias.value.find(x => x.id === id)
+  nomeNovo.value = c ? proximoNomeGrupo(c) : ''
+  soAdminsNovo.value = c?.soAdmins ?? true
+}
+watch(categoriaNovo, sugerir)
+function abrirNovo() {
+  // Com uma categoria só (ou filtrando por uma), ela já vem escolhida
+  const filtrada = categorias.value.find(c => c.id === filtroCategoria.value)
+  categoriaNovo.value = filtrada?.id ?? (categorias.value.length === 1 ? categorias.value[0]!.id : '')
+  sugerir(categoriaNovo.value)
+  criado.value = false
+  novoAberto.value = true
+}
+async function criarNovo() {
+  const c = categorias.value.find(x => x.id === categoriaNovo.value)
+  if (!c) {
+    erroCategoria.value = 'Escolha a categoria do grupo'
+    return
+  }
+  if (nomeNovo.value.trim().length < 2) {
+    erroNome.value = 'Dê um nome para o grupo'
+    return
+  }
+  criando.value = true
+  const g = await criarGrupo(c, nomeNovo.value, soAdminsNovo.value)
+  criando.value = false
+  if (!g) return
+  criado.value = true
+  disparar(botaoCriar.value?.$el ?? null)
+  toast.sucesso('Grupo criado no WhatsApp', `${g.nome} entrou no fim da ordem de ${c.nome}.`)
+  setTimeout(() => (novoAberto.value = false), 700)
+}
+
 const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-elevated hover:text-fg active:scale-95'
 </script>
 
@@ -92,10 +153,16 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
         <h1 class="animate-fade-up text-[26px] font-semibold leading-8 tracking-tight">Grupos</h1>
         <p class="mt-1 animate-fade-up text-muted [animation-delay:60ms]">Os grupos do seu WhatsApp. Escolha a categoria de cada um.</p>
       </div>
-      <UiBotao variante="secundario" tamanho="sm" class="shrink-0" :disabled="!conectado || sincronizando" @click="atualizar">
-        <UiIcone nome="atualizar" :tamanho="16" :class="sincronizando && 'animate-spin'" />
-        <span class="hidden sm:inline">Atualizar</span>
-      </UiBotao>
+      <div class="flex shrink-0 gap-2">
+        <UiBotao variante="secundario" tamanho="sm" :disabled="!conectado || sincronizando" @click="atualizar">
+          <UiIcone nome="atualizar" :tamanho="16" :class="sincronizando && 'animate-spin'" />
+          <span class="hidden sm:inline">Atualizar</span>
+        </UiBotao>
+        <UiBotao tamanho="sm" :disabled="!conectado" @click="abrirNovo">
+          <UiIcone nome="usuarios" :tamanho="16" />
+          <span class="hidden sm:inline">Novo grupo</span>
+        </UiBotao>
+      </div>
     </header>
 
     <!-- Sem WhatsApp -->
@@ -217,8 +284,12 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
             <button v-if="selecionado.convite" type="button" :class="botaoIcone" aria-label="Copiar convite" @click="copiarConvite(selecionado.convite)">
               <UiIcone :nome="copiado ? 'check' : 'copiar'" :tamanho="16" />
             </button>
+            <UiBotao v-else tamanho="sm" variante="secundario" :carregando="buscandoConvite" :disabled="!conectado" @click="buscarConviteSelecionado">
+              Buscar
+              <template #carregando>Buscando…</template>
+            </UiBotao>
           </div>
-          <Transition name="troca" mode="out-in">
+          <Transition v-if="selecionado.convite" name="troca" mode="out-in">
             <div v-if="confirmarConvite" key="c" class="flex flex-col gap-2 rounded border border-line p-3">
               <p class="text-label">O convite atual para de funcionar. O link de entrada da categoria continua funcionando normalmente.</p>
               <div class="flex gap-2">
@@ -237,6 +308,35 @@ const botaoIcone = 'flex size-9 shrink-0 items-center justify-center rounded tex
       </div>
       <template #acoes>
         <UiBotao variante="secundario" @click="detalhesAberto = false">Fechar</UiBotao>
+      </template>
+    </UiDialogo>
+
+    <!-- Novo grupo -->
+    <UiDialogo
+      v-model="novoAberto"
+      titulo="Novo grupo"
+      descricao="Criado no seu WhatsApp, com o seu número como admin. As pessoas entram pelo link da categoria."
+    >
+      <div v-if="!categorias.length" class="flex flex-col gap-3">
+        <p class="text-label text-muted">Crie uma categoria primeiro: é ela que dá o link de entrada e as ofertas que o grupo vai receber.</p>
+        <UiBotao variante="secundario" tamanho="sm" class="self-start" @click="navigateTo('/painel/categorias')">Ir para Categorias</UiBotao>
+      </div>
+      <form v-else id="form-novo-grupo-lista" class="flex flex-col gap-5" novalidate @submit.prevent="criarNovo">
+        <UiSelecao v-model="categoriaNovo" rotulo="Categoria" placeholder="Escolha a categoria" :opcoes="opcoesCategoriaNovo" :erro="erroCategoria" />
+        <UiCampo v-model="nomeNovo" rotulo="Nome do grupo" :erro="erroNome" />
+        <UiInterruptor v-model="soAdminsNovo" rotulo="Só admins enviam mensagens" descricao="Recomendado: o grupo fica só com as ofertas." />
+        <p class="flex items-start gap-2 rounded bg-surface p-3 text-label text-muted">
+          <UiIcone nome="info" :tamanho="16" class="mt-0.5 shrink-0" />
+          Ele entra no fim da ordem de entrada da categoria. A descrição vem da categoria.
+        </p>
+      </form>
+      <template #acoes>
+        <UiBotao variante="secundario" :disabled="criando" @click="novoAberto = false">Cancelar</UiBotao>
+        <UiBotao v-if="categorias.length" ref="botaoCriar" type="submit" form="form-novo-grupo-lista" :carregando="criando" :sucesso="criado">
+          <UiIcone nome="usuarios" :tamanho="16" /> Criar grupo
+          <template #carregando>Criando no WhatsApp…</template>
+          <template #sucesso>Grupo criado!</template>
+        </UiBotao>
       </template>
     </UiDialogo>
   </div>

@@ -2,7 +2,8 @@ import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 
 // Cliente da UazAPI (só no servidor). Doc: fornecida pelo usuário sob demanda — não
-// inventar rotas/campos. Implementado: POST /instance/create (header "admintoken").
+// inventar rotas/campos. Implementado: instância (create/status/connect) e grupos
+// (list/invitelink/create).
 // O token de cada instância fica em whatsapp_credenciais (RLS sem políticas) e nunca
 // vai para o navegador.
 
@@ -132,6 +133,9 @@ export async function conectarInstancia(token: string, telefone?: string) {
   }
 }
 
+// Só aceita convite do WhatsApp (o /g/<slug>/entrar redireciona para ele)
+const CONVITE = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/
+
 interface GrupoUazapi {
   JID?: string
   Name?: string
@@ -161,9 +165,33 @@ export async function listarGrupos(token: string) {
       admin: g.OwnerIsAdmin === true,
       podeEnviar: g.OwnerCanSendMessage !== false,
       soAdmins: g.IsAnnounce === true,
-      convite: g.invite_link || null,
+      convite: g.invite_link && CONVITE.test(g.invite_link) ? g.invite_link : null,
       foto: g.image_preview_url || g.image_url || null
     }))
+}
+
+// GET /group/invitelink/{jid} — devolve o convite atual (não revoga: chamadas repetidas
+// trazem o mesmo link). Exige o número como admin. ~2–4 s por grupo.
+export async function obterConvite(token: string, jid: string) {
+  const r = await chamar<{ inviteLink?: string }>(`/group/invitelink/${encodeURIComponent(jid)}`, { method: 'GET', headers: { token } })
+  return r.inviteLink && CONVITE.test(r.inviteLink) ? r.inviteLink : null
+}
+
+// POST /group/create — sempre sem participantes: o WhatsApp inclui só o criador (admin) e
+// as pessoas entram pelo convite (adicionar sem pedido é o que mais bane número).
+export async function criarGrupoWhatsapp(token: string, nome: string) {
+  const r = await chamar<{ group?: GrupoUazapi }>('/group/create', {
+    method: 'POST',
+    headers: { token },
+    body: { name: nome, participants: [] }
+  })
+  if (!r.group?.JID) throw new ErroUazapi(500, 'A UazAPI não devolveu o grupo criado.')
+  return {
+    jid: r.group.JID,
+    nome: r.group.Name?.trim() || nome,
+    membros: r.group.ParticipantCount || 1,
+    convite: r.group.invite_link && CONVITE.test(r.group.invite_link) ? r.group.invite_link : null
+  }
 }
 
 // Instância do cliente: devolve a existente ou cria na primeira vez
