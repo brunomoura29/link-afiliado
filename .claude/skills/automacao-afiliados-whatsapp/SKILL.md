@@ -239,6 +239,10 @@ próxima (ver checklist de aceite no fim).
   preço de propósito). Futuro: **Shopee Affiliate Open API** (acesso já
   solicitado pelo usuário) para preencher o preço — exceção aprovada à regra
   "nenhuma API de afiliados", por credencial de cada cliente.
+  Em guia anônima o preço aparece (o JS da página assina a requisição; sem
+  login). Navegador automático (Playwright) no servidor seria viável, mas foi
+  **adiado pelo usuário** (peso/hospedagem/risco de bloqueio) — não reabrir
+  sem ele pedir.
 - **Condição do preço:** quando a loja diz "no Pix", o preço só vale no Pix →
   `ofertas.condicao_preco = 'no Pix'` e a legenda tem que dizer. O % de
   desconto usado é o **da loja** (`desconto_rotulo`), não a conta.
