@@ -1,8 +1,8 @@
-// Conexão do WhatsApp do cliente (UazAPI, pelo servidor).
-// Real: status (GET /api/whatsapp/status). Ainda simulado até chegar a doc da UazAPI:
-// conectar por QR / código pelo número e desconectar.
+// Conexão do WhatsApp do cliente (UazAPI, sempre pelo servidor — o token não vem ao navegador).
+// Status: GET /api/whatsapp/status. Conectar: POST /api/whatsapp/conectar (QR ou código pelo
+// número) e depois acompanha o status até parear. Desconectar: aguardando a doc da UazAPI.
 
-export type StatusWhatsapp = 'desconectado' | 'gerando' | 'aguardando' | 'conectando' | 'conectado'
+export type StatusWhatsapp = 'desconectado' | 'gerando' | 'aguardando' | 'conectado'
 export type ModoConexao = 'codigo' | 'qr'
 
 interface EstadoWhatsapp {
@@ -16,23 +16,18 @@ interface EstadoWhatsapp {
   foto: string | null
   conectadoEm: string | null // ISO
   motivoDesconexao: string | null
-  codigo: string // código de pareamento (modo "codigo")
-  semente: number // muda a cada novo QR
-  expiraEm: number | null // timestamp do vencimento do código/QR
-  tentativas: number
+  codigo: string // código de pareamento, ex.: "ABCD-1234"
+  qrcode: string | null // imagem base64 vinda da UazAPI
+  expiraEm: number | null // limite para concluir o pareamento
 }
 
-const VALIDADE_MS = 45_000
-const MAX_TENTATIVAS = 3
+const PRAZO_MS = 3 * 60_000 // tempo para ler o QR / digitar o código
+const INTERVALO_MS = 3_000 // de quanto em quanto tempo confere o status
 
-function gerarCodigo() {
-  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let c = ''
-  for (let i = 0; i < 8; i++) c += letras[Math.floor(Math.random() * letras.length)]
-  return `${c.slice(0, 4)}-${c.slice(4)}`
-}
+// "ABCD1234" → "ABCD-1234"
+const formatarCodigo = (c: string) => (c.includes('-') || c.length !== 8 ? c : `${c.slice(0, 4)}-${c.slice(4)}`)
 
-const espera = (ms: number) => new Promise(r => setTimeout(r, ms))
+let acompanhamento: ReturnType<typeof setInterval> | undefined
 
 export function useWhatsapp() {
   const toast = useToast()
@@ -48,12 +43,12 @@ export function useWhatsapp() {
     conectadoEm: null,
     motivoDesconexao: null,
     codigo: '',
-    semente: 1,
-    expiraEm: null,
-    tentativas: 0
+    qrcode: null,
+    expiraEm: null
   }))
 
   const conectado = computed(() => estado.value.status === 'conectado')
+  const emConexao = () => ['gerando', 'aguardando'].includes(estado.value.status)
 
   // Lê o status na UazAPI (pelo servidor)
   async function carregarStatus() {
@@ -65,65 +60,90 @@ export function useWhatsapp() {
       e.semInstancia = r.situacao === 'sem_instancia'
       if (r.situacao !== 'ok') {
         if (r.situacao === 'instancia_invalida') e.erro = r.mensagem
-        // Durante o fluxo de conexão (simulado) não sobrescreve o que está na tela
-        if (!['gerando', 'aguardando', 'conectando'].includes(e.status)) e.status = 'desconectado'
+        if (!emConexao()) e.status = 'desconectado'
         return true
       }
-      if (['gerando', 'aguardando', 'conectando'].includes(e.status) && r.status !== 'conectado') return true
-      e.status = r.status as StatusWhatsapp
-      e.numero = formatarNumeroWhatsapp(r.numero)
-      e.nomePerfil = r.nomePerfil ?? ''
-      e.foto = r.foto ?? null
-      e.conectadoEm = r.conectadoEm ?? null
+      if (r.status === 'conectado') {
+        e.status = 'conectado'
+        e.numero = formatarNumeroWhatsapp(r.numero)
+        e.nomePerfil = r.nomePerfil ?? ''
+        e.foto = r.foto ?? null
+        e.conectadoEm = r.conectadoEm ?? null
+        e.expiraEm = null
+        pararAcompanhamento()
+        return true
+      }
+      if (emConexao()) {
+        // QR do WhatsApp troca a cada poucos segundos; o código também pode ser renovado
+        if (r.qrcode) e.qrcode = r.qrcode
+        if (r.paircode) e.codigo = formatarCodigo(r.paircode)
+        return true
+      }
+      e.status = 'desconectado'
       e.motivoDesconexao = r.motivoDesconexao ?? null
     } catch {
       e.carregado = true
-      e.erro = 'Não foi possível consultar o WhatsApp agora.'
+      if (!emConexao()) e.erro = 'Não foi possível consultar o WhatsApp agora.'
     }
     return true
   }
 
-  // ── Conexão (simulada até chegar a doc da UazAPI) ──
+  function pararAcompanhamento() {
+    clearInterval(acompanhamento)
+    acompanhamento = undefined
+  }
 
-  async function gerar(modo: ModoConexao, numero?: string) {
+  function acompanhar() {
+    pararAcompanhamento()
+    acompanhamento = setInterval(async () => {
+      const e = estado.value
+      if (e.expiraEm && Date.now() > e.expiraEm) {
+        cancelar()
+        toast.erro('O tempo para conectar acabou', 'Gere um novo código quando estiver com o celular em mãos.')
+        return
+      }
+      await carregarStatus()
+    }, INTERVALO_MS)
+  }
+
+  // Pede o QR code ou o código pelo número (telefone com DDD, ex.: "(85) 99438-7766")
+  async function gerar(modo: ModoConexao, telefone?: string): Promise<{ ok: boolean, mensagem?: string }> {
     const e = estado.value
     e.modo = modo
-    if (numero) e.numero = numero
     e.status = 'gerando'
-    e.tentativas = 0
-    await espera(900)
-    renovar()
-  }
-
-  // Código/QR vencem; renova algumas vezes e depois desiste
-  function renovar() {
-    const e = estado.value
-    if (e.tentativas >= MAX_TENTATIVAS) {
+    e.codigo = ''
+    e.qrcode = null
+    e.erro = null
+    try {
+      const r = await $fetch('/api/whatsapp/conectar', { method: 'POST', body: { modo, telefone } })
+      if (r.status === 'conectado') {
+        await carregarStatus()
+        return { ok: true }
+      }
+      e.qrcode = r.qrcode
+      e.codigo = r.paircode ? formatarCodigo(r.paircode) : ''
+      e.status = 'aguardando'
+      e.semInstancia = false
+      e.expiraEm = Date.now() + PRAZO_MS
+      acompanhar()
+      return { ok: true }
+    } catch (err) {
       e.status = 'desconectado'
-      e.expiraEm = null
-      return false
+      const { statusMessage, data } = err as { statusMessage?: string, data?: { message?: string } }
+      const mensagem = statusMessage === 'telefone_invalido' ? 'Número inválido: informe o celular com DDD.'
+        : data?.message ?? 'Não foi possível iniciar a conexão. Tente de novo.'
+      e.erro = mensagem
+      return { ok: false, mensagem }
     }
-    e.tentativas++
-    e.codigo = gerarCodigo()
-    e.semente = Math.random()
-    e.expiraEm = Date.now() + VALIDADE_MS
-    e.status = 'aguardando'
-    return true
   }
 
-  async function simularLeitura() {
-    const e = estado.value
-    e.status = 'conectando'
-    await espera(1400)
-    e.status = 'conectado'
-    e.conectadoEm = new Date().toISOString()
-    e.expiraEm = null
-    if (!e.nomePerfil) e.nomePerfil = 'Meu WhatsApp'
-  }
-
+  // Para de acompanhar na tela (a tentativa na UazAPI expira sozinha)
   function cancelar() {
+    pararAcompanhamento()
     estado.value.status = 'desconectado'
     estado.value.expiraEm = null
+    estado.value.qrcode = null
+    estado.value.codigo = ''
   }
 
   // TODO: doc de desconectar da UazAPI. false = não feito (já avisou)
@@ -132,5 +152,5 @@ export function useWhatsapp() {
     return false
   }
 
-  return { estado, conectado, carregarStatus, gerar, renovar, simularLeitura, cancelar, desconectar }
+  return { estado, conectado, carregarStatus, gerar, cancelar, desconectar, pararAcompanhamento }
 }

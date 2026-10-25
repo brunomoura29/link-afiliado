@@ -6,9 +6,12 @@ useHead({ title: 'WhatsApp · LinkAfiliado' })
 
 const toast = useToast()
 const { disparar } = useConfete()
-const { estado, carregarStatus, gerar, renovar, simularLeitura, cancelar, desconectar } = useWhatsapp()
-// Confere de novo ao abrir a tela (o layout já carregou uma vez)
+const { estado, carregarStatus, gerar, cancelar, desconectar, pararAcompanhamento } = useWhatsapp()
+// Confere de novo ao abrir a tela (o layout já carregou uma vez); ao sair, para de acompanhar
 onMounted(() => carregarStatus())
+onBeforeUnmount(() => {
+  if (estado.value.status !== 'aguardando') pararAcompanhamento()
+})
 const { grupos } = useGrupos()
 const { ofertas, carregar: carregarOfertas } = useOfertas()
 await useAsyncData('ofertas', carregarOfertas)
@@ -38,8 +41,18 @@ async function iniciar() {
     erroNumero.value = 'Informe o número com DDD'
     return
   }
-  await gerar(modo.value, modo.value === 'codigo' ? `+55 ${numero.value}` : undefined)
+  const r = await gerar(modo.value, modo.value === 'codigo' ? numero.value : undefined)
+  if (!r.ok) toast.erro('Não foi possível conectar', r.mensagem)
 }
+
+// Pareou: comemora (a verificação é feita a cada 3s pelo useWhatsapp)
+const areaPareamento = ref<HTMLElement>()
+watch(() => estado.value.status, (novo, antigo) => {
+  if (novo === 'conectado' && antigo === 'aguardando') {
+    disparar(areaPareamento.value ?? null, 36)
+    toast.sucesso('WhatsApp conectado!', 'Agora é só escolher os grupos que vão receber as ofertas.')
+  }
+})
 
 // Contagem regressiva do código/QR
 const agora = ref(Date.now())
@@ -47,21 +60,9 @@ let relogio: ReturnType<typeof setInterval> | undefined
 onMounted(() => (relogio = setInterval(() => (agora.value = Date.now()), 250)))
 onBeforeUnmount(() => clearInterval(relogio))
 
-const VALIDADE = 45
+const VALIDADE = 180 // mesmo prazo do useWhatsapp (3 min)
 const restante = computed(() => estado.value.expiraEm ? Math.max(0, Math.ceil((estado.value.expiraEm - agora.value) / 1000)) : 0)
-const tempoTexto = computed(() => `0:${String(restante.value).padStart(2, '0')}`)
-watch(restante, (r) => {
-  if (r === 0 && estado.value.status === 'aguardando' && !renovar()) {
-    toast.erro('O código expirou', 'Gere um novo quando estiver com o celular em mãos.')
-  }
-})
-
-const botaoPrevia = ref<{ $el: HTMLElement }>()
-async function conectarPrevia() {
-  await simularLeitura()
-  disparar(botaoPrevia.value?.$el ?? null, 36)
-  toast.sucesso('WhatsApp conectado!', 'Agora é só escolher os grupos que vão receber as ofertas.')
-}
+const tempoTexto = computed(() => `${Math.floor(restante.value / 60)}:${String(restante.value % 60).padStart(2, '0')}`)
 
 const copiado = ref(false)
 async function copiarCodigo() {
@@ -90,7 +91,7 @@ const iniciais = computed(() => (estado.value.nomePerfil || 'W').split(/\s+/).fi
 
 const PASSOS = computed(() => modo.value === 'codigo'
   ? [
-      `Abra o WhatsApp no celular do número ${estado.value.numero}`,
+      `Abra o WhatsApp no celular do número ${numero.value}`,
       'Toque em ⋮ (Android) ou Configurações (iPhone) › Aparelhos conectados',
       'Toque em Conectar aparelho › Conectar com número de telefone',
       'Digite o código acima'
@@ -227,11 +228,11 @@ const MODOS = [
           </div>
 
           <!-- Pareando -->
-          <div v-else key="pareando" class="flex flex-col gap-5">
+          <div v-else key="pareando" ref="areaPareamento" class="flex flex-col gap-5">
             <div class="flex items-center justify-between gap-3">
               <p class="font-semibold">{{ estado.modo === 'codigo' ? 'Digite este código no WhatsApp' : 'Escaneie com o WhatsApp' }}</p>
-              <span v-if="estado.status === 'aguardando'" class="shrink-0 text-label tabular-nums text-muted">
-                {{ estado.tentativas }}/3
+              <span v-if="estado.status === 'aguardando'" class="flex shrink-0 items-center gap-1.5 text-label text-muted">
+                <UiSpinner :tamanho="14" /> aguardando
               </span>
             </div>
 
@@ -242,8 +243,8 @@ const MODOS = [
             </div>
 
             <!-- Código de pareamento -->
-            <div v-else-if="estado.modo === 'codigo'" class="relative flex flex-col items-center gap-3">
-              <div class="flex items-center gap-1.5" :class="estado.status === 'conectando' && 'opacity-40 blur-[1px] transition'">
+            <div v-else-if="estado.modo === 'codigo'" class="flex flex-col items-center gap-3">
+              <div v-if="estado.codigo" class="flex items-center gap-1.5">
                 <span
                   v-for="(c, i) in estado.codigo.split('')"
                   :key="`${estado.codigo}-${i}`"
@@ -252,34 +253,29 @@ const MODOS = [
                   :style="{ animationDelay: `${i * 45}ms` }"
                 >{{ c }}</span>
               </div>
-              <UiBotao v-if="estado.status === 'aguardando'" variante="fantasma" tamanho="sm" @click="copiarCodigo">
+              <p v-else class="flex h-14 items-center gap-2 text-muted"><UiSpinner /> Esperando o código da UazAPI…</p>
+              <UiBotao v-if="estado.codigo" variante="fantasma" tamanho="sm" @click="copiarCodigo">
                 <UiIcone :nome="copiado ? 'check' : 'copiar'" :tamanho="16" /> {{ copiado ? 'Copiado' : 'Copiar código' }}
               </UiBotao>
-              <div v-if="estado.status === 'conectando'" class="absolute inset-0 flex items-center justify-center gap-2 font-semibold">
-                <UiSpinner /> Conectando…
-              </div>
             </div>
 
-            <!-- QR -->
+            <!-- QR (imagem real da UazAPI; troca sozinho de tempos em tempos) -->
             <div v-else class="mx-auto w-full max-w-[260px]">
-              <WhatsappQrCode :semente="estado.semente" :lido="estado.status === 'conectando'">
-                <div v-if="estado.status === 'conectando'" class="absolute inset-0 flex items-center justify-center gap-2 font-semibold text-[#0d0d0d]">
-                  <UiSpinner /> Conectando…
-                </div>
-              </WhatsappQrCode>
+              <WhatsappQrCode v-if="estado.qrcode" :imagem="estado.qrcode" :semente="1" />
+              <p v-else class="flex aspect-square items-center justify-center gap-2 rounded-lg bg-surface text-muted"><UiSpinner /> Esperando o QR code…</p>
             </div>
 
-            <!-- Validade -->
+            <!-- Prazo -->
             <div v-if="estado.status === 'aguardando'" class="flex items-center gap-3">
               <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
                 <div
                   class="h-full rounded-full bg-fg transition-[width] duration-300 ease-linear"
-                  :class="restante <= 10 && '!bg-status-rejeitada'"
+                  :class="restante <= 20 && '!bg-status-rejeitada'"
                   :style="{ width: `${(restante / VALIDADE) * 100}%` }"
                 />
               </div>
-              <span class="w-24 text-right text-label tabular-nums" :class="restante <= 10 ? 'text-status-rejeitada' : 'text-muted'">
-                Expira em {{ tempoTexto }}
+              <span class="w-28 text-right text-label tabular-nums" :class="restante <= 20 ? 'text-status-rejeitada' : 'text-muted'">
+                Tempo: {{ tempoTexto }}
               </span>
             </div>
 
@@ -291,18 +287,7 @@ const MODOS = [
               </li>
             </ol>
 
-            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-              <UiBotao variante="fantasma" :disabled="estado.status === 'conectando'" @click="cancelar">Cancelar</UiBotao>
-              <UiBotao
-                ref="botaoPrevia"
-                variante="secundario"
-                class="border-dashed"
-                :disabled="estado.status !== 'aguardando'"
-                @click="conectarPrevia"
-              >
-                Simular conexão (prévia)
-              </UiBotao>
-            </div>
+            <UiBotao variante="fantasma" class="self-start" @click="cancelar">Cancelar</UiBotao>
           </div>
         </Transition>
       </UiCard>

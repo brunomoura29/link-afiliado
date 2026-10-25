@@ -100,6 +100,38 @@ export async function statusInstancia(token: string) {
   }
 }
 
+interface RespostaConectar {
+  instance?: { status?: StatusInstancia, qrcode?: string, paircode?: string }
+  status?: { connected?: boolean, loggedIn?: boolean }
+  connected?: boolean
+  loggedIn?: boolean
+}
+
+// POST /instance/connect — sem phone: QR code; com phone (5511999999999): código de pareamento.
+// A instância fica "connecting" até parear ou expirar; acompanhar por GET /instance/status
+// e NÃO repetir a chamada enquanto estiver em andamento (409).
+export async function conectarInstancia(token: string, telefone?: string) {
+  try {
+    const r = await chamar<RespostaConectar>('/instance/connect', {
+      method: 'POST',
+      headers: { token },
+      // history_days: 1 → pede o mínimo de histórico (o app não usa conversas antigas)
+      body: { ...(telefone ? { phone: telefone } : {}), history_days: 1 }
+    })
+    return {
+      emAndamento: false,
+      conectado: !!(r.status?.connected ?? r.connected) && !!(r.status?.loggedIn ?? r.loggedIn),
+      qrcode: r.instance?.qrcode || null,
+      paircode: r.instance?.paircode || null
+    }
+  } catch (e) {
+    // Já existe um fluxo em andamento: segue com ele (QR/código vêm pelo status)
+    if (e instanceof ErroUazapi && e.status === 409) return { emAndamento: true, conectado: false, qrcode: null, paircode: null }
+    if (e instanceof ErroUazapi && e.status === 429) throw new ErroUazapi(429, 'Muitas conexões ao mesmo tempo na UazAPI. Tente de novo em instantes.')
+    throw e
+  }
+}
+
 // Instância do cliente: devolve a existente ou cria na primeira vez
 export async function garantirInstancia(event: H3Event, ownerId: string) {
   const admin = serverSupabaseServiceRole(event)

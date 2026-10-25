@@ -303,6 +303,16 @@ próxima (ver checklist de aceite no fim).
 - **Instância de teste do usuário: `theus`** (ligada à conta dele à mão). Ela é
   usada por OUTRO sistema dele (`systemName: ecommerceBi`): só leitura. Antes
   de desconectar, trocar webhook ou enviar mensagens por ela, **perguntar**.
+- **Conectar (implementado)** — `POST /instance/connect` (token): sem `phone`
+  → QR (`instance.qrcode` base64); com `phone` (55+DDD+número) → código
+  (`instance.paircode`). Enviamos `history_days: 1`. Fica `connecting` até
+  parear/expirar; acompanhar por `GET /instance/status` (QR troca sozinho) e
+  **não repetir** a chamada no meio (409 = já em andamento → seguir com ele).
+  `POST /api/whatsapp/conectar` cria a instância se faltar e **não chama
+  connect se a instância já estiver conectada** (reconectaria a sessão).
+  Prazo na tela: 3 min, conferindo o status a cada 3 s.
+- Sucesso do pareamento ainda **não testado de ponta a ponta** (falta instância
+  livre: plano com 2 vagas e 4 instâncias). Testar só em instância livre.
 - Nunca enviar em sequência imediata — sempre via fila (próximo item).
 
 ### 7. Fila de envio (cron)
