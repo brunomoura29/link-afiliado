@@ -72,7 +72,11 @@ export async function criarInstancia(nome: string, ownerId: string) {
 export async function garantirInstancia(event: H3Event, ownerId: string) {
   const admin = serverSupabaseServiceRole(event)
   const { data: existente } = await admin.from('whatsapp_credenciais').select('instancia, instancia_id, token').eq('owner_id', ownerId).maybeSingle()
-  if (existente) return { ...existente, criada: false, aviso: null as string | null }
+  if (existente) {
+    // Instância ligada à mão (ex.: testes) pode estar sem o registro de conexão
+    await admin.from('whatsapp_conexoes').upsert({ owner_id: ownerId, status: 'desconectado' }, { onConflict: 'owner_id', ignoreDuplicates: true })
+    return { ...existente, criada: false, aviso: null as string | null }
+  }
 
   // Nome único e sem dados pessoais
   const nome = `la-${ownerId.slice(0, 8)}-${Math.random().toString(36).slice(2, 7)}`
