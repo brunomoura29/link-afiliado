@@ -29,6 +29,8 @@ export type Database = {
           padrao_nome: string
           palavra_chave: string | null
           recebe_todas: boolean
+          repetir_a_cada_dias: number | null
+          repetir_max: number
           slug: string
           so_admins: boolean
         }
@@ -45,6 +47,8 @@ export type Database = {
           padrao_nome?: string
           palavra_chave?: string | null
           recebe_todas?: boolean
+          repetir_a_cada_dias?: number | null
+          repetir_max?: number
           slug: string
           so_admins?: boolean
         }
@@ -61,6 +65,8 @@ export type Database = {
           padrao_nome?: string
           palavra_chave?: string | null
           recebe_todas?: boolean
+          repetir_a_cada_dias?: number | null
+          repetir_max?: number
           slug?: string
           so_admins?: boolean
         }
@@ -171,6 +177,7 @@ export type Database = {
           mensagem_id: string | null
           oferta_id: string
           pego_em: string | null
+          rodada: number
           owner_id: string
           status: string
           tentativas: number
@@ -186,6 +193,7 @@ export type Database = {
           mensagem_id?: string | null
           oferta_id: string
           pego_em?: string | null
+          rodada?: number
           owner_id: string
           status?: string
           tentativas?: number
@@ -201,6 +209,7 @@ export type Database = {
           mensagem_id?: string | null
           oferta_id?: string
           pego_em?: string | null
+          rodada?: number
           owner_id?: string
           status?: string
           tentativas?: number
@@ -315,7 +324,13 @@ export type Database = {
           owner_id: string
           plataforma: string
           preco: number | null
+          preco_enviado: number | null
           preco_original: number | null
+          proxima_repeticao_em: string | null
+          repeticao_pausada: string | null
+          repeticoes_feitas: number
+          repetir_a_cada_dias: number | null
+          repetir_max: number
           status: string
           titulo: string | null
           url_produto: string | null
@@ -338,7 +353,13 @@ export type Database = {
           owner_id?: string
           plataforma: string
           preco?: number | null
+          preco_enviado?: number | null
           preco_original?: number | null
+          proxima_repeticao_em?: string | null
+          repeticao_pausada?: string | null
+          repeticoes_feitas?: number
+          repetir_a_cada_dias?: number | null
+          repetir_max?: number
           status?: string
           titulo?: string | null
           url_produto?: string | null
@@ -361,7 +382,13 @@ export type Database = {
           owner_id?: string
           plataforma?: string
           preco?: number | null
+          preco_enviado?: number | null
           preco_original?: number | null
+          proxima_repeticao_em?: string | null
+          repeticao_pausada?: string | null
+          repeticoes_feitas?: number
+          repetir_a_cada_dias?: number | null
+          repetir_max?: number
           status?: string
           titulo?: string | null
           url_produto?: string | null

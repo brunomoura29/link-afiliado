@@ -77,8 +77,10 @@ function limparFiltros() {
 }
 
 // Detalhes / nova
-const selecionada = ref<Oferta | null>(null)
-const detalhesAberto = computed({ get: () => !!selecionada.value, set: v => !v && (selecionada.value = null) })
+// Pelo id: a lista é recarregada (a cada 15 s e depois de enviar) e os detalhes acompanham
+const selecionadaId = ref<string | null>(null)
+const selecionada = computed(() => ofertas.value.find(o => o.id === selecionadaId.value) ?? null)
+const detalhesAberto = computed({ get: () => !!selecionada.value, set: v => !v && (selecionadaId.value = null) })
 const novaAberta = ref(false)
 </script>
 
@@ -136,7 +138,7 @@ const novaAberta = ref(false)
               :key="o.id"
               :oferta="o"
               :categoria="categoriaDe(o)"
-              @abrir="selecionada = o"
+              @abrir="selecionadaId = o.id"
             />
           </TransitionGroup>
         </UiCard>
@@ -159,7 +161,7 @@ const novaAberta = ref(false)
         :key="selecionada.id"
         :oferta="selecionada"
         :categoria="categoriaDe(selecionada)"
-        @fechar="selecionada = null"
+        @fechar="selecionadaId = null"
       />
     </UiDialogo>
 

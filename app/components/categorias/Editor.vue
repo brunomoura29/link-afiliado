@@ -13,7 +13,12 @@ const EMOJIS = ['🏠', '🍳', '🛋️', '🧹', '🎧', '📱', '💻', '🎮
 const novo = !props.categoria
 const r = reactive<CategoriaGrupo>(props.categoria
   ? { ...props.categoria }
-  : { id: `c${Date.now()}`, nome: '', emoji: '🛒', slug: '', palavraChave: '', descricao: '', ativa: true, autoCriar: true, padraoNome: '', soAdmins: true, recebeTodas: false })
+  : { id: `c${Date.now()}`, nome: '', emoji: '🛒', slug: '', palavraChave: '', descricao: '', ativa: true, autoCriar: true, padraoNome: '', soAdmins: true, recebeTodas: false, repetirACadaDias: null, repetirMax: 3 })
+
+const repeticao = computed({
+  get: () => ({ aCadaDias: r.repetirACadaDias, max: r.repetirMax }),
+  set: (v: { aCadaDias: number | null, max: number }) => Object.assign(r, { repetirACadaDias: v.aCadaDias, repetirMax: v.max })
+})
 
 // Endereço, palavra-chave e nome dos grupos acompanham o nome até a pessoa mexer neles
 const tocado = reactive({ slug: !novo, palavraChave: !novo, padraoNome: !novo })
@@ -145,6 +150,15 @@ async function excluir() {
       />
       <UiInterruptor v-model="r.autoCriar" rotulo="Criar grupo novo quando lotar" descricao="O link de entrada passa para o grupo novo sozinho." />
       <UiInterruptor v-model="r.soAdmins" rotulo="Só admins enviam mensagens" descricao="O grupo fica só com as ofertas, sem conversa." />
+    </fieldset>
+
+    <!-- Repetição: padrão das ofertas novas desta categoria -->
+    <fieldset class="flex flex-col gap-4">
+      <legend class="mb-3 text-label font-semibold text-muted">Ofertas</legend>
+      <OfertasRepeticao
+        v-model="repeticao"
+        descricao="Padrão das ofertas novas desta categoria (dá para mudar em cada oferta). O preço é lido de novo antes de cada repetição."
+      />
     </fieldset>
 
     <UiInterruptor

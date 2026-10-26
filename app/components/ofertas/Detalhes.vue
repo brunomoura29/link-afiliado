@@ -6,7 +6,7 @@ const props = defineProps<{ oferta: Oferta, categoria?: CategoriaGrupo }>()
 const emit = defineEmits<{ fechar: [] }>()
 
 const toast = useToast()
-const { novaLegenda, tentarNovamente, enviarAgora, excluir } = useOfertas()
+const { novaLegenda, tentarNovamente, enviarAgora, excluir, configurarRepeticao, enviarDeNovo } = useOfertas()
 
 const desconto = computed(() => Number(props.oferta.descontoRotulo?.match(/\d+/)?.[0])
   || (props.oferta.preco != null && props.oferta.original ? Math.round((1 - props.oferta.preco / props.oferta.original) * 100) : null))
@@ -37,7 +37,7 @@ async function copiarLegenda() {
   setTimeout(() => (copiado.value = false), 1500)
 }
 
-const processando = ref<'enviar' | 'tentar' | 'excluir' | null>(null)
+const processando = ref<'enviar' | 'denovo' | 'tentar' | 'excluir' | null>(null)
 const falhou = () => toast.erro('Não foi possível concluir', 'Verifique sua internet e tente de novo.')
 async function enviar() {
   processando.value = 'enviar'
@@ -49,6 +49,46 @@ async function enviar() {
     r.naFila ? `Já foi para ${r.enviados} grupo(s). Os outros ${r.naFila} recebem no intervalo normal, para proteger o número.` : `Publicada em ${r.enviados} grupo(s).`
   )
 }
+async function deNovo() {
+  processando.value = 'denovo'
+  const r = await enviarDeNovo(props.oferta)
+  processando.value = null
+  if (!r) return
+  toast.whatsapp(
+    'Enviada de novo',
+    r.naFila ? `Já foi para ${r.enviados} grupo(s), com o preço lido agora. Os outros ${r.naFila} recebem no intervalo normal.` : `Publicada em ${r.enviados} grupo(s), com o preço lido agora.`
+  )
+}
+
+// Repetição automática: salva a cada mudança (e salvar tira a pausa)
+const salvandoRepeticao = ref(false)
+const repeticao = computed({
+  get: () => ({ aCadaDias: props.oferta.repeticao.aCadaDias, max: props.oferta.repeticao.max }),
+  set: async (cfg: { aCadaDias: number | null, max: number }) => {
+    salvandoRepeticao.value = true
+    await configurarRepeticao(props.oferta, cfg)
+    salvandoRepeticao.value = false
+  }
+})
+async function retomarRepeticao() {
+  salvandoRepeticao.value = true
+  if (await configurarRepeticao(props.oferta, repeticao.value)) toast.sucesso('Repetição retomada')
+  salvandoRepeticao.value = false
+}
+const dataCurta = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+// Envios agrupados por rodada (a mais recente primeiro)
+const rodadas = computed(() => {
+  const porRodada = new Map<number, typeof props.oferta.envios>()
+  for (const e of props.oferta.envios) porRodada.set(e.rodada, [...(porRodada.get(e.rodada) ?? []), e])
+  return [...porRodada.entries()].sort((a, b) => b[0] - a[0]).map(([n, envios]) => ({
+    n,
+    titulo: n === 1 ? '1º envio' : `${n - 1}ª repetição`,
+    quando: envios.map(e => e.quando).filter(Boolean).sort()[0] ?? null,
+    envios
+  }))
+})
+
 async function tentar() {
   processando.value = 'tentar'
   try {
@@ -183,22 +223,48 @@ const ICONE_ENVIO = {
       </p>
     </section>
 
-    <!-- Envios -->
-    <section v-if="oferta.envios.length">
-      <p class="mb-2 font-semibold">Grupos</p>
-      <ul class="flex flex-col divide-y divide-line rounded border border-line">
-        <li v-for="e in oferta.envios" :key="e.grupo" class="flex items-center gap-3 p-3">
-          <span class="flex size-7 shrink-0 items-center justify-center rounded-full" :class="ICONE_ENVIO[e.status].classe">
-            <UiIcone :nome="ICONE_ENVIO[e.status].icone" :tamanho="14" :traco="2.5" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-label font-semibold">{{ e.grupo }}</span>
-            <span class="block text-[12px]" :class="e.status === 'erro' ? 'text-status-rejeitada' : 'text-muted'">
-              {{ e.status === 'enviado' ? `Enviada ${tempoRelativo(e.quando)}` : e.status === 'na_fila' ? 'Na fila, aguardando o intervalo' : e.status === 'enviando' ? 'Enviando…' : e.erro ?? 'Não foi enviada' }}
+    <!-- Envios (por rodada) -->
+    <section v-if="oferta.envios.length" class="flex flex-col gap-4">
+      <div v-for="r in rodadas" :key="r.n">
+        <p class="mb-2 flex items-baseline justify-between gap-2">
+          <span class="font-semibold">{{ rodadas.length > 1 ? r.titulo : 'Grupos' }}</span>
+          <span v-if="r.quando" class="text-[12px] text-muted">{{ dataCurta(r.quando) }}</span>
+        </p>
+        <ul class="flex flex-col divide-y divide-line rounded border border-line">
+          <li v-for="(e, i) in r.envios" :key="`${e.grupo}-${i}`" class="flex items-center gap-3 p-3">
+            <span class="flex size-7 shrink-0 items-center justify-center rounded-full" :class="ICONE_ENVIO[e.status].classe">
+              <UiIcone :nome="ICONE_ENVIO[e.status].icone" :tamanho="14" :traco="2.5" />
             </span>
-          </span>
-        </li>
-      </ul>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-label font-semibold">{{ e.grupo }}</span>
+              <span class="block text-[12px]" :class="e.status === 'erro' ? 'text-status-rejeitada' : 'text-muted'">
+                {{ e.status === 'enviado' ? `Enviada ${tempoRelativo(e.quando)}` : e.status === 'na_fila' ? 'Na fila, aguardando o intervalo' : e.status === 'enviando' ? 'Enviando…' : e.erro ?? 'Não foi enviada' }}
+              </span>
+            </span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Repetição automática -->
+    <section v-if="oferta.status === 'aprovada' || oferta.status === 'enviada'" class="flex flex-col gap-3 rounded border border-line p-4">
+      <OfertasRepeticao v-model="repeticao" :disabled="salvandoRepeticao" />
+      <div v-if="oferta.repeticao.pausada" class="flex flex-col gap-2 rounded bg-status-rejeitada/5 p-3 text-label">
+        <p class="flex items-start gap-2">
+          <UiIcone nome="alerta" :tamanho="16" class="mt-0.5 shrink-0 text-status-rejeitada" />
+          <span><strong class="text-status-rejeitada">Repetição pausada.</strong> {{ oferta.repeticao.pausada }}</span>
+        </p>
+        <UiBotao tamanho="sm" variante="secundario" class="self-start" :carregando="salvandoRepeticao" @click="retomarRepeticao">
+          Retomar repetição
+          <template #carregando>Salvando…</template>
+        </UiBotao>
+      </div>
+      <p v-else-if="oferta.repeticao.aCadaDias" class="text-[12px] text-muted">
+        {{ oferta.repeticao.feitas }} de {{ oferta.repeticao.max }} repetições feitas.
+        <template v-if="oferta.repeticao.proxima">Próxima: {{ dataCurta(oferta.repeticao.proxima) }} (o preço é lido de novo antes).</template>
+        <template v-else-if="oferta.repeticao.feitas >= oferta.repeticao.max">Concluída.</template>
+        <template v-else-if="oferta.status === 'aprovada'">A próxima é marcada quando este envio terminar.</template>
+      </p>
     </section>
 
     <!-- Informações -->
@@ -220,6 +286,10 @@ const ICONE_ENVIO = {
       <UiBotao v-if="oferta.status === 'aprovada'" variante="whatsapp" bloco :carregando="processando === 'enviar'" @click="enviar">
         <UiIcone nome="enviar" :tamanho="18" /> Enviar agora, sem esperar a fila
         <template #carregando>Enviando…</template>
+      </UiBotao>
+      <UiBotao v-if="oferta.status === 'enviada'" variante="secundario" bloco :carregando="processando === 'denovo'" @click="deNovo">
+        <UiIcone nome="atualizar" :tamanho="18" /> Enviar de novo agora
+        <template #carregando>Lendo o produto e enviando…</template>
       </UiBotao>
       <Transition name="troca" mode="out-in">
         <div v-if="confirmandoExclusao" key="c" class="flex flex-col gap-3 rounded border border-status-rejeitada/40 bg-status-rejeitada/5 p-3">

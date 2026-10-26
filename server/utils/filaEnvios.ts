@@ -76,13 +76,15 @@ export async function processarDono(admin: Admin, ownerId: string, opcoes: { ign
   const { data: cred } = await admin.from('whatsapp_credenciais').select('token').eq('owner_id', ownerId).maybeSingle()
   if (!cred) return 'sem_whatsapp'
 
-  // Primeiro os de "Enviar agora" (agendado_para preenchido), depois por ordem de chegada
+  // Primeiro os de "Enviar agora" (agendado_para preenchido), depois ofertas novas antes de
+  // repetições (rodada 1 primeiro: repetição só ocupa a vaga do limite diário que sobrar)
   const { data: candidatos } = await admin.from('envios')
-    .select('id, oferta_id, destino_id, criado_em, tentativas, whatsapp_destinos(jid, nome, recebe_ofertas, pode_enviar, categorias(ativa)), ofertas(legenda, imagem_url, status, lida_em)')
+    .select('id, oferta_id, destino_id, criado_em, tentativas, rodada, whatsapp_destinos(jid, nome, recebe_ofertas, pode_enviar, categorias(ativa)), ofertas(legenda, imagem_url, status, lida_em)')
     .eq('owner_id', ownerId)
     .eq('status', 'na_fila')
     .or(`agendado_para.is.null,agendado_para.lte.${agora.toISOString()}`)
     .order('agendado_para', { ascending: true, nullsFirst: false })
+    .order('rodada', { ascending: true })
     .order('criado_em', { ascending: true })
     .limit(20)
   if (!candidatos?.length) return 'nada_na_fila'
@@ -173,9 +175,22 @@ export async function processarDono(admin: Admin, ownerId: string, opcoes: { ign
   return 'enviado'
 }
 
-// Oferta vira "enviada" quando nada dela está mais na fila e pelo menos um grupo recebeu
+// Oferta vira "enviada" quando nada dela está mais na fila e pelo menos um grupo recebeu;
+// aí, se ela repete, marca a próxima rodada (e guarda o preço, para ver se subiu)
 async function concluirOferta(admin: Admin, ofertaId: string) {
-  const { data: envios } = await admin.from('envios').select('status').eq('oferta_id', ofertaId)
+  const rodada = await rodadaAtual(admin, ofertaId)
+  const { data: envios } = await admin.from('envios').select('status').eq('oferta_id', ofertaId).eq('rodada', rodada)
   if (!envios?.length || envios.some(e => e.status === 'na_fila' || e.status === 'enviando')) return
-  if (envios.some(e => e.status === 'enviado')) await admin.from('ofertas').update({ status: 'enviada' }).eq('id', ofertaId).eq('status', 'aprovada')
+  if (!envios.some(e => e.status === 'enviado')) {
+    // 1ª rodada sem nenhum envio: fica "aprovada" (dá para tentar pelo "Enviar agora").
+    // Repetição sem nenhum envio: volta a "enviada" e pausa, para não ficar presa.
+    if (rodada > 1) {
+      await admin.from('ofertas').update({ status: 'enviada', repeticao_pausada: 'Nenhum grupo recebeu a última repetição. Veja o motivo em cada grupo.', proxima_repeticao_em: null })
+        .eq('id', ofertaId).eq('status', 'aprovada')
+    }
+    return
+  }
+  const { data: o } = await admin.from('ofertas').update({ status: 'enviada' }).eq('id', ofertaId).eq('status', 'aprovada')
+    .select('preco, repetir_a_cada_dias, repetir_max, repeticoes_feitas, repeticao_pausada').maybeSingle()
+  if (o) await admin.from('ofertas').update({ preco_enviado: o.preco, proxima_repeticao_em: proximaRepeticao(o) }).eq('id', ofertaId)
 }

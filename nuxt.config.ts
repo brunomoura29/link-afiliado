@@ -32,8 +32,21 @@ export default defineNuxtConfig({
     uazapiAdminToken: process.env.UAZAPI_ADMIN_TOKEN ?? '',
     // Chave do agendador da fila de envio (header x-fila-segredo). Em produção: NUXT_FILA_SEGREDO
     filaSegredo: process.env.FILA_SEGREDO ?? '',
+    // Liga as tarefas agendadas (fila a cada minuto, repetição de hora em hora). Só no
+    // servidor de produção: NUXT_FILA_AUTOMATICA=true
+    filaAutomatica: process.env.FILA_AUTOMATICA === 'true',
     public: {
       urlBase: '' // NUXT_PUBLIC_URL_BASE em produção (ex.: https://linkafiliado.app)
+    }
+  },
+
+  // Tarefas agendadas (server/tasks): o app roda como servidor Node sempre ligado (Easypanel).
+  // Elas só fazem algo com NUXT_FILA_AUTOMATICA=true. Rodar 1 réplica só do app.
+  nitro: {
+    experimental: { tasks: true },
+    scheduledTasks: {
+      '* * * * *': ['fila:processar'],
+      '7 * * * *': ['ofertas:repetir']
     }
   },
 

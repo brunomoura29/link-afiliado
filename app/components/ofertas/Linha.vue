@@ -7,9 +7,16 @@ defineEmits<{ abrir: [] }>()
 
 const desconto = computed(() => Number(props.oferta.descontoRotulo?.match(/\d+/)?.[0])
   || (props.oferta.preco != null && props.oferta.original ? Math.round((1 - props.oferta.preco / props.oferta.original) * 100) : null))
+// Progresso da rodada atual (cada repetição é uma rodada nova)
 const progresso = computed(() => {
-  const e = props.oferta.envios
+  const rodada = Math.max(1, ...props.oferta.envios.map(x => x.rodada))
+  const e = props.oferta.envios.filter(x => x.rodada === rodada)
   return e.length ? `${e.filter(x => x.status === 'enviado').length}/${e.length} grupos` : ''
+})
+const repete = computed(() => {
+  const r = props.oferta.repeticao
+  if (!r.aCadaDias || props.oferta.status === 'rejeitada') return ''
+  return r.pausada ? 'repetição pausada' : r.feitas >= r.max ? '' : `repete a cada ${r.aCadaDias} dias`
 })
 </script>
 
@@ -52,6 +59,7 @@ const progresso = computed(() => {
       <span class="mt-1 block truncate text-[12px] text-muted">
         {{ categoria?.emoji }} {{ categoria?.nome ?? 'Sem categoria' }} · {{ oferta.origem }} · {{ tempoRelativo(oferta.criadaEm) }}
         <template v-if="oferta.status === 'aprovada' && progresso"> · {{ progresso }}</template>
+        <template v-if="repete"> · <span :class="oferta.repeticao.pausada && 'text-status-rejeitada'">{{ repete }}</span></template>
       </span>
     </span>
   </button>

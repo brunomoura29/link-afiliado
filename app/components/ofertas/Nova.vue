@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import type { Oferta } from '~/composables/useOfertas'
+
 // Cadastrar oferta pelo próprio painel (mesma lógica do formulário público).
 const emit = defineEmits<{ fechar: [] }>()
 
 const toast = useToast()
 const { categorias } = useGrupos()
-const { adicionar } = useOfertas()
+const { ofertas, adicionar, enviarDeNovo } = useOfertas()
 const salvando = ref(false)
 
 const categoria = ref('')
@@ -12,7 +14,23 @@ const link = ref('')
 const erroCategoria = ref('')
 const erroLink = ref('')
 watch(categoria, () => (erroCategoria.value = ''))
-watch(link, () => (erroLink.value = ''))
+watch(link, () => {
+  erroLink.value = ''
+  existente.value = null
+})
+
+// Link que já está na conta: se já foi enviado, oferece mandar de novo (produto lido de novo)
+const existente = ref<Oferta | null>(null)
+const reenviando = ref(false)
+async function reenviar() {
+  if (!existente.value) return
+  reenviando.value = true
+  const r = await enviarDeNovo(existente.value)
+  reenviando.value = false
+  if (!r) return
+  toast.whatsapp('Enviada de novo', r.naFila ? `Já foi para ${r.enviados} grupo(s). Os outros ${r.naFila} recebem no intervalo normal.` : `Publicada em ${r.enviados} grupo(s).`)
+  emit('fechar')
+}
 
 const opcoes = computed(() => categorias.value.filter(c => c.ativa).map(c => ({ valor: c.id, rotulo: `${c.emoji}  ${c.nome}` })))
 const plataforma = computed(() => detectarPlataforma(link.value))
@@ -35,7 +53,9 @@ async function salvar() {
   const resultado = await adicionar(categoria.value, normalizarLink(link.value), plataforma.value)
   salvando.value = false
   if (resultado === 'duplicada') {
-    erroLink.value = 'Esse link já foi cadastrado'
+    const o = ofertas.value.find(x => x.link === normalizarLink(link.value)) ?? null
+    if (o?.status === 'enviada') existente.value = o
+    else erroLink.value = o?.status === 'aprovada' || o?.status === 'pendente' ? 'Esse link já está na fila de envio' : 'Esse link já foi cadastrado'
     return
   }
   if (resultado === 'erro') {
@@ -64,6 +84,16 @@ async function salvar() {
     </UiCampo>
     <div class="h-7">
       <Transition name="marcado"><UiBadgePlataforma v-if="plataforma" :plataforma="plataforma" /></Transition>
+    </div>
+    <div v-if="existente" class="flex flex-col gap-3 rounded border border-line bg-surface p-3 text-label">
+      <p>
+        Esse link já foi enviado<template v-if="existente.titulo"> (<strong>{{ existente.titulo }}</strong>)</template>.
+        Quer mandar de novo? O preço é lido agora e a legenda é reescrita.
+      </p>
+      <UiBotao tamanho="sm" variante="whatsapp" class="self-start" :carregando="reenviando" @click="reenviar">
+        <UiIcone nome="atualizar" :tamanho="16" /> Enviar de novo agora
+        <template #carregando>Lendo o produto e enviando…</template>
+      </UiBotao>
     </div>
     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <UiBotao variante="secundario" @click="emit('fechar')">Cancelar</UiBotao>

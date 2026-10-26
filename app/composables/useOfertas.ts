@@ -9,6 +9,15 @@ export interface Envio {
   status: 'enviado' | 'na_fila' | 'enviando' | 'erro'
   quando: string | null
   erro: string | null // motivo, quando falhou ou não foi enviado
+  rodada: number // 1 = 1º envio, 2 = 1ª repetição...
+}
+
+export interface RepeticaoOferta {
+  aCadaDias: number | null // null = não repete
+  max: number
+  feitas: number // repetições já feitas (sem contar o 1º envio)
+  proxima: string | null // quando sai a próxima rodada
+  pausada: string | null // motivo da pausa (preço subiu, produto sumiu...)
 }
 
 export interface Oferta {
@@ -29,9 +38,10 @@ export interface Oferta {
   criadaEm: string
   matiz: number // cor da miniatura enquanto não há foto
   envios: Envio[]
+  repeticao: RepeticaoOferta
 }
 
-type LinhaOferta = Tables<'ofertas'> & { envios: Pick<Tables<'envios'>, 'grupo_nome' | 'status' | 'enviado_em' | 'erro'>[] }
+type LinhaOferta = Tables<'ofertas'> & { envios: Pick<Tables<'envios'>, 'grupo_nome' | 'status' | 'enviado_em' | 'erro' | 'rodada'>[] }
 
 // Cor estável a partir do id (a miniatura não muda a cada recarga)
 const matizDo = (id: string) => [...id].reduce((s, c) => (s * 31 + c.charCodeAt(0)) % 360, 7)
@@ -53,10 +63,17 @@ const daLinha = (o: LinhaOferta): Oferta => ({
   origem: o.origem_nome,
   criadaEm: o.criado_em,
   matiz: matizDo(o.id),
-  envios: (o.envios ?? []).map(e => ({ grupo: e.grupo_nome, status: e.status as Envio['status'], quando: e.enviado_em, erro: e.erro }))
+  envios: (o.envios ?? []).map(e => ({ grupo: e.grupo_nome, status: e.status as Envio['status'], quando: e.enviado_em, erro: e.erro, rodada: e.rodada })),
+  repeticao: {
+    aCadaDias: o.repetir_a_cada_dias,
+    max: o.repetir_max,
+    feitas: o.repeticoes_feitas,
+    proxima: o.proxima_repeticao_em,
+    pausada: o.repeticao_pausada
+  }
 })
 
-const COLUNAS = '*, envios(grupo_nome, status, enviado_em, erro)'
+const COLUNAS = '*, envios(grupo_nome, status, enviado_em, erro, rodada)'
 
 export function useOfertas() {
   const supabase = useSupabaseClient()
@@ -138,5 +155,32 @@ export function useOfertas() {
     }
   }
 
-  return { ofertas, carregar, adicionar, tentarNovamente, relerParadas, excluir, novaLegenda, enviarAgora }
+  // Repetição automática desta oferta (salvar também tira a pausa). false = falhou (já avisou)
+  async function configurarRepeticao(o: Oferta, cfg: { aCadaDias: number | null, max: number }) {
+    try {
+      const r = await $fetch(`/api/ofertas/${o.id}/repeticao`, { method: 'POST', body: cfg })
+      o.repeticao = { aCadaDias: r.repetir_a_cada_dias, max: r.repetir_max, feitas: r.repeticoes_feitas, proxima: r.proxima_repeticao_em, pausada: r.repeticao_pausada }
+      return true
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      toast.erro('Não foi possível salvar a repetição', msg ?? 'Verifique sua internet e tente de novo.')
+      return false
+    }
+  }
+
+  // "Enviar de novo agora": nova rodada com o produto lido de novo; o 1º grupo recebe na hora.
+  // null = não enviou (já avisou)
+  async function enviarDeNovo(o: Oferta): Promise<{ enviados: number, naFila: number } | null> {
+    try {
+      const r = await $fetch(`/api/ofertas/${o.id}/repetir`, { method: 'POST' })
+      await carregar()
+      return r
+    } catch (e) {
+      const msg = (e as { data?: { message?: string } }).data?.message
+      toast.erro('Não foi possível enviar de novo', msg ?? 'Verifique sua internet e tente de novo.')
+      return null
+    }
+  }
+
+  return { ofertas, carregar, adicionar, tentarNovamente, relerParadas, excluir, novaLegenda, enviarAgora, configurarRepeticao, enviarDeNovo }
 }

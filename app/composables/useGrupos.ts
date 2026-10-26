@@ -15,6 +15,8 @@ export interface CategoriaGrupo {
   padraoNome: string // nome dos grupos novos; "#" vira o número
   soAdmins: boolean // grupos novos só deixam admins enviarem
   recebeTodas: boolean // "geral": os grupos dela recebem as ofertas de todas as categorias
+  repetirACadaDias: number | null // padrão das ofertas novas: repete a cada N dias (null = não)
+  repetirMax: number // até quantas repetições (1 a 10)
 }
 
 export interface Grupo {
@@ -47,7 +49,9 @@ const daLinhaCategoria = (c: Tables<'categorias'>): CategoriaGrupo => ({
   autoCriar: c.auto_criar,
   padraoNome: c.padrao_nome,
   soAdmins: c.so_admins,
-  recebeTodas: c.recebe_todas
+  recebeTodas: c.recebe_todas,
+  repetirACadaDias: c.repetir_a_cada_dias,
+  repetirMax: c.repetir_max
 })
 
 const paraLinhaCategoria = (c: CategoriaGrupo): TablesInsert<'categorias'> => ({
@@ -60,7 +64,9 @@ const paraLinhaCategoria = (c: CategoriaGrupo): TablesInsert<'categorias'> => ({
   auto_criar: c.autoCriar,
   padrao_nome: c.padraoNome.trim(),
   so_admins: c.soAdmins,
-  recebe_todas: c.recebeTodas
+  recebe_todas: c.recebeTodas,
+  repetir_a_cada_dias: c.repetirACadaDias,
+  repetir_max: c.repetirMax
 })
 
 const daLinhaGrupo = (g: Tables<'whatsapp_destinos'>): Grupo => ({

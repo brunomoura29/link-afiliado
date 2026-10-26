@@ -17,14 +17,14 @@ export default defineEventHandler(async (event) => {
   if (oferta.status !== 'aprovada') throw createError({ statusCode: 409, statusMessage: 'nao_aprovada', message: 'Só dá para enviar uma oferta aprovada.' })
 
   if (!oferta.lida_em || Date.now() - new Date(oferta.lida_em).getTime() > VALIDADE_OFERTA) {
-    await processarOferta(event, id) // lê de novo, escreve a legenda e monta a fila
+    await processarOferta(admin, id) // lê de novo, escreve a legenda e monta a fila
     oferta = (await ler()).data
     if (oferta?.status !== 'aprovada') {
       throw createError({ statusCode: 409, statusMessage: 'releitura_falhou', message: oferta?.motivo ?? 'Não deu para ler o produto de novo. Tente mais tarde.' })
     }
   } else {
     const { count } = await admin.from('envios').select('id', { count: 'exact', head: true }).eq('oferta_id', id).eq('status', 'na_fila')
-    if (!count) await colocarNaFila(event, usuario.sub, id, oferta.categoria_id)
+    if (!count) await colocarNaFila(admin, usuario.sub, id, oferta.categoria_id, await rodadaAtual(admin, id))
   }
 
   const { data: naFila } = await admin.from('envios').update({ agendado_para: new Date().toISOString() })
